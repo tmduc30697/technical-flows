@@ -4,23 +4,6 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống web (mạng x�
 
 ---
 
-## Đổi kiểu lưu số điện thoại từ 1 field sang bảng riêng (mạng xã hội)
-
-**Repository:** `schema-migration-social-phone-table-split`
-
-**Hệ thống:** Một mạng xã hội cho phép user thêm nhiều số điện thoại (hiện lưu 1 field `phone` trong bảng `users`, cần chuyển sang bảng `user_phones` hỗ trợ nhiều số).
-
-**Vai trò của flow:** Trong giai đoạn chuyển đổi, mọi request update số điện thoại phải ghi đồng thời (dual-write) vào cả field cũ và bảng mới để hai luồng đọc (code cũ chưa deploy xong, code mới đã deploy) đều thấy dữ liệu đúng, không mất update nào.
-
-**Yêu cầu cụ thể:**
-- Thiết kế thứ tự dual-write cụ thể: ghi vào bảng mới `user_phones` trước, sau đó update field cũ `users.phone`, và giải thích vì sao thứ tự này an toàn hơn nếu có crash giữa 2 bước (bảng mới là nguồn sự thật tạm thời).
-- Mô tả race condition cụ thể: request A update số điện thoại qua code cũ (chỉ ghi field `phone`) đồng thời với request B update qua code mới (dual-write cả 2 nơi) — chỉ ra cách đảm bảo instance nào deploy code cũ trong lúc rollout cũng không làm dữ liệu bảng mới bị lệch (ví dụ dùng trigger DB đồng bộ 2 chiều tạm thời trong giai đoạn transition).
-- Có bước backfill dữ liệu cũ sang bảng mới cho toàn bộ user hiện có, chạy theo batch, không lock bảng `users` quá lâu (đo và giới hạn thời gian mỗi batch, ví dụ dưới 200ms).
-- Định nghĩa rõ 3 giai đoạn rollout: (1) dual-write + đọc từ field cũ, (2) dual-write + đọc từ bảng mới (đã backfill xong), (3) chỉ ghi/đọc bảng mới, xóa field cũ — mỗi giai đoạn phải chạy ổn định một thời gian trước khi sang giai đoạn kế.
-- Xử lý case update đồng thời 2 request khác nhau cho cùng 1 user trong giai đoạn dual-write: đảm bảo không có tình trạng bảng mới có giá trị A còn field cũ có giá trị B (write ra thứ tự khác nhau do 2 request chạy song song không lock).
-
----
-
 ## Tách bảng `orders` thành `orders` + `order_items` không downtime (e-commerce)
 
 **Repository:** `schema-migration-ecommerce-orders-split`
@@ -69,20 +52,3 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống web (mạng x�
 - Trong giai đoạn dual-write trước cutover, mọi write cho tenant đang migrate phải ghi cả 2 schema trong cùng 1 transaction phân tán (hoặc pattern outbox/saga nếu 2 schema ở 2 connection khác nhau), có xử lý rõ khi 1 trong 2 bên ghi thất bại (retry hoặc rollback toàn bộ, không để 1 bên có 1 bên không).
 - Yêu cầu đọc dữ liệu trong giai đoạn dual-write luôn đọc từ schema cũ (nguồn sự thật) cho tới khi cutover, để tránh đọc dữ liệu chưa backfill đầy đủ ở schema mới.
 - Có checklist rollback: nếu sau cutover phát hiện lỗi dữ liệu ở schema mới, phải trả routing của tenant đó về schema cũ trong vòng vài phút mà không mất giao dịch nào ghi vào schema mới trong khoảng thời gian đã cutover.
-
----
-
-## Thêm cột `status` có logic mới thay thế cho 3 cột boolean cũ trong hệ thống logistics
-
-**Repository:** `schema-migration-logistics-status-column`
-
-**Hệ thống:** Một hệ thống quản lý vận đơn (logistics) đang lưu trạng thái đơn hàng bằng 3 cột boolean riêng (`is_picked`, `is_shipped`, `is_delivered`), cần chuyển sang 1 cột `status` enum để dễ mở rộng thêm trạng thái mới.
-
-**Vai trò của flow:** Trong lúc migrate, mọi transition trạng thái đơn hàng (worker quét mã khi lấy hàng, khi giao hàng...) phải ghi nhất quán cả 3 cột boolean cũ và cột `status` mới, đảm bảo 2 cách biểu diễn luôn tương đương nhau dù có bao nhiêu worker cùng cập nhật đơn hàng đồng thời.
-
-**Yêu cầu cụ thể:**
-- Định nghĩa bảng mapping tường minh giữa tổ hợp 3 boolean cũ và giá trị enum mới (bao gồm cả các tổ hợp không hợp lệ về mặt logic hiện tại, ví dụ `is_delivered=true` nhưng `is_shipped=false`) và quy tắc xử lý khi gặp dữ liệu cũ không hợp lệ lúc backfill.
-- Mô tả race condition cụ thể: 2 worker quét mã cùng lúc cho cùng 1 đơn hàng ở 2 trạm khác nhau (một quét "shipped", một quét "delivered" do lỗi quy trình) — yêu cầu transaction update phải `SELECT ... FOR UPDATE` trên dòng đơn hàng và validate transition hợp lệ (chỉ cho phép theo đúng thứ tự picked → shipped → delivered) trước khi ghi cả 3 boolean và enum, từ chối transition không hợp lệ với lỗi rõ ràng.
-- Yêu cầu mọi write trong giai đoạn dual-write phải cùng 1 transaction ghi cả 3 cột boolean và cột `status`, không cho phép có thời điểm nào 2 cách biểu diễn lệch nhau dù đọc ở transaction khác đang chạy song song.
-- Backfill dữ liệu lịch sử phải log rõ danh sách các đơn hàng có tổ hợp boolean không hợp lệ để team vận hành review tay, không tự động đoán và ghi sai enum.
-- Sau khi chuyển toàn bộ luồng đọc/ghi sang cột `status`, quy định thời gian giữ lại 3 cột boolean cũ (dual-write một chiều để an toàn) trước khi được phép xóa hẳn, và điều kiện để rút ngắn thời gian này.

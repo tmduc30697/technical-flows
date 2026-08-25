@@ -21,23 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần khóa/bầu lea
 
 ---
 
-## Giữ chỗ tồn kho trong flash sale (inventory reservation)
-
-**Repository:** `distributed-lock-flash-sale-inventory`
-
-**Hệ thống:** Trang thương mại điện tử tổ chức flash sale, hàng nghìn user cùng bấm mua một sản phẩm limited stock trong vài giây.
-
-**Vai trò của flow:** Dùng lock phân tán (per-SKU) để đảm bảo chỉ một request tại một thời điểm được trừ tồn kho cho sản phẩm đó, tránh oversell.
-
-**Yêu cầu cụ thể:**
-- Lock phải scope theo từng SKU (không lock toàn hệ thống) để không nghẽn cổ chai khi nhiều SKU khác nhau được mua song song.
-- Thời gian giữ lock phải rất ngắn (chỉ đủ để check + trừ tồn kho, không giữ lock qua bước gọi payment gateway) để tối đa throughput.
-- Nếu giữ lock quá X ms không xử lý xong phải tự nhả và trả lỗi timeout cho client, không để user chờ vô hạn.
-- Phải benchmark throughput tối thiểu (ví dụ >= 500 request/giây/SKU) và đo được lock contention rate khi nhiều instance cùng tranh 1 SKU.
-- Xử lý crash của Redis/coordinator node giữ lock: có failover sang node khác mà không làm mất tính đúng đắn của tồn kho (không cho oversell dù coordinator down).
-
----
-
 ## Leader coordinator cho cache invalidation tránh thundering herd
 
 **Repository:** `distributed-lock-cache-thundering-herd`
@@ -52,23 +35,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần khóa/bầu lea
 - Có cơ chế "single flight" nội bộ trong từng instance kết hợp với lock phân tán giữa các instance để giảm số round-trip tới coordinator.
 - Đo lường: số lượng DB query giảm được so với baseline không có coordinator (mục tiêu giảm >90% query trùng lặp trong 1 giây đầu sau cache miss).
 - Xử lý network partition giữa instance và Redis: instance phải có fallback (ví dụ tự query DB có giới hạn rate) khi không kết nối được coordinator, tránh outage toàn phần.
-
----
-
-## Leader phân việc cho pool worker xử lý video
-
-**Repository:** `distributed-lock-video-worker-pool-leader`
-
-**Hệ thống:** Nền tảng chia sẻ video cần một cụm worker xử lý encode/transcode video upload, worker được scale động.
-
-**Vai trò của flow:** Một worker được bầu làm leader (qua lease-based election) để phân chia job (assign video nào cho worker nào), các worker còn lại là follower chỉ xử lý job được giao.
-
-**Yêu cầu cụ thể:**
-- Leader phải định kỳ renew lease; nếu leader chết hoặc mất kết nối quá TTL, một follower khác phải tự động giành lease và trở thành leader mới trong thời gian giới hạn (ví dụ dưới 15s).
-- Trong giai đoạn chuyển giao leader (không có leader), job mới không được assign nhưng job đang chạy trên worker khác vẫn phải tiếp tục, không bị hủy.
-- Phải tránh split-brain: nếu leader cũ do network delay vẫn tưởng mình là leader và tiếp tục assign job sau khi lease hết hạn, hệ thống phải phát hiện và bỏ qua assignment đó (dựa vào fencing token/lease version).
-- Có dashboard/metric hiển thị worker nào đang là leader, lịch sử chuyển leader, và số job bị assign trùng (nếu có) để giám sát.
-- Test được kịch bản network partition chia worker thành 2 nhóm, đảm bảo tối đa một leader hợp lệ tồn tại tại một thời điểm.
 
 ---
 

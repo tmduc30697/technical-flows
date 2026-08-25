@@ -38,40 +38,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần điều phối 
 
 ---
 
-## Marketplace payout cho seller sau khi đơn hàng hoàn tất
-
-**Repository:** `saga-marketplace-seller-payout`
-
-**Hệ thống:** Marketplace giữ tiền buyer trả, sau đó chia tiền cho seller, đối tác vận chuyển, và platform fee qua nhiều service tài chính riêng.
-
-**Vai trò của flow:** Saga điều phối việc trích hoa hồng, ghi ledger, và chuyển tiền cho từng bên; rollback đúng phần nếu một bước ghi nhận thất bại.
-
-**Yêu cầu cụ thể:**
-- Mỗi bước ghi nhận vào ledger phải là append-only (event sourcing) — không update/xóa record cũ, chỉ ghi thêm event compensating khi cần đảo ngược.
-- Nếu bước chuyển tiền cho seller thất bại sau khi đã ghi nhận platform fee, phải có compensating event đảo ngược đúng số tiền platform fee đã ghi, không chỉ đơn giản xóa transaction.
-- Toàn bộ trạng thái tài chính tại bất kỳ thời điểm nào phải tái tạo được (rebuild) bằng cách replay lại toàn bộ event từ đầu — dùng để đối soát (reconciliation) hàng ngày.
-- Đảm bảo idempotency: nếu message xử lý bước saga bị retry (do consumer crash trước khi ack), không được ghi nhận trùng 2 lần cùng một sự kiện tài chính.
-- Có báo cáo/alert khi một payout saga bị compensate (tức là giao dịch tài chính bị đảo ngược) để đội vận hành/tài chính review, vì đây là sự kiện nhạy cảm.
-
----
-
-## Vòng đời chuyến đi ride-hailing (đặt xe, matching, hoàn thành, thanh toán)
-
-**Repository:** `saga-ride-hailing-trip-lifecycle`
-
-**Hệ thống:** App gọi xe với vòng đời một chuyến đi đi qua nhiều service: matching driver, tracking, tính phí, thanh toán.
-
-**Vai trò của flow:** Saga theo dõi trạng thái chuyến đi qua các service, xử lý các case hủy giữa đường (driver hủy sau khi match, mất kết nối app trong lúc đi).
-
-**Yêu cầu cụ thể:**
-- Định nghĩa các state hợp lệ của chuyến đi (requested, matched, ongoing, completed, cancelled) và saga phải từ chối các transition không hợp lệ (ví dụ không thể "completed" khi chưa "matched").
-- Nếu driver hủy sau khi matched nhưng trước khi bắt đầu chuyến, saga phải tự động re-matching với driver khác mà không cần user đặt lại từ đầu, và giữ nguyên lịch sử event cũ.
-- Nếu mất kết nối giữa app và server giữa chuyến đi, khi kết nối lại phải xác định đúng state hiện tại từ event log, tránh double charge hoặc thiếu charge.
-- Có compensating action cho trường hợp tính phí sai (ví dụ do lỗi GPS) sau khi đã charge — phát sinh refund event chứ không sửa trực tiếp bản ghi charge cũ.
-- Toàn bộ lịch sử chuyến đi phải replay được từ event log để phục vụ tranh chấp khiếu nại giữa user và driver.
-
----
-
 ## Nâng/hạ cấp gói subscription xuyên nhiều service (billing + entitlement + notification)
 
 **Repository:** `saga-subscription-plan-change`

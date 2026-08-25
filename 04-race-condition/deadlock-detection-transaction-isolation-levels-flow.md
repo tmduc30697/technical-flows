@@ -38,40 +38,6 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống web khác nhau
 
 ---
 
-## Cập nhật tồn kho và giá bán trong hệ thống kho vận e-commerce
-
-**Repository:** `deadlock-ecommerce-warehouse-inventory-price`
-
-**Hệ thống:** Một hệ thống quản lý kho cho sàn e-commerce, có job đồng bộ tồn kho từ nhà cung cấp và luồng đặt hàng của khách chạy song song 24/7.
-
-**Vai trò của flow:** Job đồng bộ tồn kho (update nhiều SKU theo batch) và transaction đặt hàng (trừ tồn từng SKU riêng lẻ) cùng cạnh tranh lock trên bảng `sku_stock`, cần thiết kế để tránh deadlock giữa update theo batch và update đơn lẻ.
-
-**Yêu cầu cụ thể:**
-- Batch job cập nhật tồn kho phải sort danh sách SKU theo khóa chính trước khi update tuần tự trong 1 transaction, để không lock ngược thứ tự với các transaction đặt hàng khác đang chạy song song.
-- Giới hạn kích thước batch (ví dụ tối đa 200 SKU/transaction) để giảm thời gian giữ lock, tránh transaction đặt hàng của khách phải chờ quá lâu phía sau một batch update lớn.
-- Chọn isolation level phù hợp cho transaction đặt hàng để không đọc được tồn kho "ma" (tồn đã bị batch job update nhưng chưa commit) — giải thích rõ tại sao `READ COMMITTED` là đủ ở đây thay vì cần `SERIALIZABLE`.
-- Khi phát hiện deadlock giữa batch job và transaction đặt hàng, quy định ai được ưu tiên thắng (transaction đặt hàng của khách nên được retry ưu tiên, batch job có thể chờ lâu hơn) và cách implement priority này (ví dụ: batch job có retry backoff dài hơn).
-- Có cơ chế giám sát (metric/alert) đếm số lần deadlock xảy ra mỗi giờ để phát hiện sớm khi tần suất tăng bất thường (dấu hiệu lock ordering có vấn đề).
-
----
-
-## Duyệt đơn nghỉ phép và chấm công trong hệ thống HRM nội bộ
-
-**Repository:** `deadlock-hrm-leave-timesheet-approval`
-
-**Hệ thống:** Một hệ thống quản lý nhân sự nội bộ, nơi manager duyệt đơn nghỉ phép và hệ thống payroll tự động tính công cuối tháng, cả hai đều đụng vào bảng `attendance_record` của nhân viên.
-
-**Vai trò của flow:** Transaction duyệt đơn nghỉ phép (update trạng thái + số ngày còn lại) và transaction tính công hàng loạt cuối tháng (đọc + update nhiều nhân viên) cần tránh deadlock lẫn đọc sai dữ liệu khi chạy chồng lấn thời gian.
-
-**Yêu cầu cụ thể:**
-- Mô tả cụ thể việc job tính công cuối tháng chạy `UPDATE` theo thứ tự employee_id tăng dần trên toàn bộ nhân viên trong 1 transaction lớn, còn action duyệt đơn nghỉ phép của manager là transaction nhỏ chỉ động vào 1 nhân viên — chỉ ra vì sao vẫn có thể deadlock nếu job tính công không tách batch nhỏ.
-- Yêu cầu tách job tính công thành nhiều transaction nhỏ theo từng phòng ban/batch, thay vì 1 transaction ôm toàn công ty, để giảm thời gian giữ lock và giảm khả năng deadlock/blocking với action duyệt đơn.
-- Chọn isolation level `READ COMMITTED` cho action duyệt đơn (chỉ cần dữ liệu mới nhất tại thời điểm duyệt), nhưng job tính công cuối tháng cần đọc snapshot nhất quán (`REPEATABLE READ` hoặc snapshot isolation) để không tính công dựa trên dữ liệu nửa cũ nửa mới.
-- Khi manager duyệt đơn đúng lúc job tính công đang chạm vào record của nhân viên đó, quy định hành vi: action duyệt đơn phải trả lỗi rõ ràng "hệ thống đang tính công, vui lòng thử lại" thay vì bị treo vô thời hạn.
-- Viết test mô phỏng job tính công chạy song song với 10 action duyệt đơn ngẫu nhiên, xác nhận không có deadlock treo vĩnh viễn và tất cả action đều kết thúc (thành công hoặc lỗi rõ ràng) trong thời gian giới hạn.
-
----
-
 ## Cập nhật điểm số và thứ hạng leaderboard trong game/app học tập
 
 **Repository:** `deadlock-game-leaderboard-update`

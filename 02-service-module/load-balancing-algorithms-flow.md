@@ -4,40 +4,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (API g
 
 ---
 
-## API Gateway cho nền tảng SaaS B2B nhiều microservice
-
-**Repository:** `load-balancing-b2b-saas-api-gateway`
-
-**Hệ thống:** Một API Gateway đứng trước cụm 5 instance của service "billing" trong nền tảng SaaS quản lý nhân sự.
-
-**Vai trò của flow:** Gateway phải phân phối request đến các instance backend sao cho tải đồng đều và tránh dồn request vào instance đang quá tải hoặc đang khởi động lại.
-
-**Yêu cầu cụ thể:**
-- Implement round-robin cơ bản, sau đó chuyển sang weighted round-robin dựa trên CPU/memory capacity khai báo của từng instance (instance yếu hơn nhận ít traffic hơn theo tỷ lệ).
-- Khi một instance mới join cluster (vừa scale up), phải tránh "thundering herd" — không dồn full trọng số ngay mà tăng dần traffic trong vài chục giây (warm-up/slow start).
-- Loại một instance khỏi vòng quay ngay khi health check báo unhealthy, và tự động đưa lại vào vòng quay khi healthy trở lại, không cần restart gateway.
-- Xử lý race condition khi danh sách instance thay đổi (scale in/out) đúng lúc đang chọn instance cho request tiếp theo — không được trả về instance đã bị remove.
-- Expose được metric số request đã route tới từng instance để verify độ lệch tải giữa các instance không vượt quá một ngưỡng cho phép.
-
----
-
-## CDN edge routing cho dịch vụ streaming video
-
-**Repository:** `load-balancing-streaming-cdn-edge-routing`
-
-**Hệ thống:** Một dịch vụ streaming video nhỏ có nhiều edge server ở các khu vực địa lý khác nhau, mỗi edge phục vụ nhiều kết nối video đang chạy dài (long-lived connections).
-
-**Vai trò của flow:** Do mỗi kết nối tồn tại lâu (khác với request ngắn của web thường), thuật toán least-connection phù hợp hơn round-robin để tránh dồn quá nhiều stream đồng thời vào một edge.
-
-**Yêu cầu cụ thể:**
-- Route request theo least-connection: chọn edge server đang có số connection đang mở thấp nhất trong cùng khu vực địa lý với người xem.
-- Đảm bảo đếm connection chính xác khi một stream bị client đóng đột ngột (mất mạng) mà không gửi tín hiệu disconnect rõ ràng — cần cơ chế timeout/heartbeat để không đếm connection "ma".
-- Khi một edge server gần đầy tải, phải fallback sang edge server ở khu vực địa lý kế cận thay vì reject, và log lại việc "overflow" này để phục vụ capacity planning.
-- Xử lý trường hợp một video viral khiến toàn bộ traffic dồn vào một vài edge gần nguồn phát — có cơ chế phát hiện hotspot và mở rộng router sang nhiều edge hơn dự kiến.
-- Đảm bảo tính nhất quán khi nhiều gateway/router instance cùng theo dõi connection count của các edge (không có single point tính toán) — dùng shared state (ví dụ Redis) với TTL hợp lý, tránh dữ liệu cũ (stale) làm sai quyết định route.
-
----
-
 ## Load balancer cho hệ thống thanh toán fintech cần session affinity
 
 **Repository:** `load-balancing-fintech-session-affinity`

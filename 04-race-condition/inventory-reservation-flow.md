@@ -21,23 +21,6 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống có tồn kho 
 
 ---
 
-## Đặt trước nguyên liệu theo món ăn trong hệ thống đặt bàn nhà hàng
-
-**Repository:** `inventory-reservation-restaurant-ingredient`
-
-**Hệ thống:** Một nền tảng đặt bàn kết hợp đặt món trước (pre-order) cho nhà hàng, một số món đặc biệt có nguyên liệu giới hạn theo ngày (ví dụ chỉ có 20 phần bò Wagyu/ngày).
-
-**Vai trò của flow:** Flow phải giữ trước số phần nguyên liệu giới hạn khi khách chọn món trong lúc đặt bàn, tránh việc nhận đặt món vượt số nguyên liệu bếp có thể chuẩn bị trong ngày.
-
-**Yêu cầu cụ thể:**
-- Khi nhiều khách đặt bàn khác nhau cùng chọn món Wagyu gần như đồng thời và tổng số phần yêu cầu vượt quá 20 phần còn lại, chỉ đúng số phần còn lại được xác nhận theo thứ tự request đến trước, các request sau nhận thông báo "món đã hết, chọn món khác" — yêu cầu cơ chế trừ tồn nguyên liệu atomic có kiểm tra ngưỡng, tương tự trừ tồn kho sản phẩm.
-- Cho phép khách sửa đổi đơn đặt món trước giờ ăn (ví dụ đổi từ 2 phần Wagyu xuống 1 phần) phải trả lại đúng 1 phần vào pool chung ngay lập tức để phục vụ khách khác đang chờ, không giữ phần dư đó cho riêng đơn của khách đã sửa.
-- Khi khách không đến (no-show) hoặc hủy đặt bàn sát giờ, quy định rõ nguyên liệu đã giữ có được tự động trả lại pool hay không tùy theo mốc thời gian hủy (ví dụ hủy trước 2 giờ mới được trả lại để bếp còn kịp dùng cho khách khác, hủy sát giờ thì không trả).
-- Bếp cần biết chính xác số phần nguyên liệu đã được đặt trước tại mọi thời điểm (không chỉ số đơn hàng) để chuẩn bị đúng — cung cấp 1 nguồn dữ liệu duy nhất mà cả app khách và màn hình bếp đều đọc, tránh 2 nơi hiển thị số liệu lệch nhau do tính riêng.
-- Xử lý trường hợp nhà hàng cập nhật giảm số lượng nguyên liệu giới hạn giữa ngày (ví dụ do nguồn cung thực tế ít hơn dự kiến) khi đã có một số đơn đặt trước — không được tự động hủy các đơn đã xác nhận, mà chỉ ngừng nhận đặt mới, và có cảnh báo nếu số đã xác nhận đã vượt số mới cập nhật.
-
----
-
 ## Giữ tồn kho khi seller và buyer thao tác đồng thời trên marketplace C2C
 
 **Repository:** `inventory-reservation-c2c-marketplace`
@@ -52,23 +35,6 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống có tồn kho 
 - 2 buyer cùng bấm "Mua ngay" cho sản phẩm chỉ còn 1 số lượng gần như đồng thời: chỉ 1 người giữ được reservation, thiết kế bằng update nguyên tử trên cột tồn kho khả dụng, có test giả lập concurrency xác nhận không có 2 reservation cùng tồn tại cho 1 đơn vị hàng.
 - Reservation của buyer phải có TTL ngắn hơn ở marketplace C2C so với e-commerce chính thức (vì tốc độ trao đổi/chat trước khi chốt mua có thể chậm), quy định giá trị TTL và cách gia hạn khi buyer và seller đang chat để thống nhất giao dịch.
 - Có audit log cho mọi thay đổi tồn kho (ai sửa, khi nào, giá trị trước/sau) để xử lý tranh chấp khi buyer khiếu nại "đã đặt được hàng nhưng sau đó bị báo hết".
-
----
-
-## Giữ tồn kho theo size/màu trong flash sale thời trang
-
-**Repository:** `inventory-reservation-fashion-flash-sale-variant`
-
-**Hệ thống:** Một sàn thời trang online, mỗi sản phẩm có nhiều biến thể (size S/M/L, màu đen/trắng), tồn kho quản lý riêng theo từng biến thể, đang chạy sale giảm giá sâu.
-
-**Vai trò của flow:** Flow reservation phải giữ đúng tồn kho theo biến thể cụ thể (không phải theo sản phẩm chung), tránh việc hết size M màu đen nhưng hệ thống báo hết cả sản phẩm hoặc ngược lại bán vượt tồn kho của riêng biến thể đó.
-
-**Yêu cầu cụ thể:**
-- Mỗi biến thể (SKU riêng theo size+màu) phải có dòng tồn kho riêng và được trừ/giữ độc lập, để việc trừ tồn kho size M màu đen không ảnh hưởng hoặc bị ảnh hưởng bởi trừ tồn kho size L màu trắng của cùng sản phẩm.
-- Mô tả cụ thể: khách thêm vào giỏ 1 sản phẩm size M màu đen khi còn 2 đơn vị, giữ reservation, sau đó đổi ý chọn sang size L màu đen ngay trong giỏ hàng — yêu cầu hệ thống phải giải phóng đúng reservation cũ (size M) và tạo reservation mới (size L) trong 1 luồng atomic, không để lộ khoảng hở giữa 2 bước khiến người khác cướp được size M đang lẽ ra phải giữ tới lúc đổi xong.
-- Khi 2 request đồng thời cùng cố giữ đơn vị tồn kho cuối cùng của 1 biến thể cụ thể (không phải cả sản phẩm), yêu cầu update nguyên tử theo đúng khóa biến thể (variant_id), có test concurrency riêng cho từng biến thể để đảm bảo lock không bị nhầm phạm vi (ví dụ lock nhầm theo product_id làm nghẽn không cần thiết giữa các biến thể khác nhau).
-- Trang sản phẩm hiển thị tồn kho theo từng biến thể phải phản ánh đúng số liệu "khả dụng" (đã trừ phần đang được reserve bởi giỏ hàng người khác), quy định độ trễ tối đa cho phép giữa lúc 1 reservation được tạo/hết hạn và lúc trang sản phẩm cập nhật hiển thị.
-- Xử lý trường hợp admin nhập thêm tồn kho cho 1 biến thể đang sắp hết (restock) đúng lúc có nhiều reservation đang hold gần hết TTL — số lượng mới nhập phải cộng đúng vào pool khả dụng ngay, không bị ghi đè mất bởi các transaction giữ/trả reservation đang chạy song song tại thời điểm restock.
 
 ---
 

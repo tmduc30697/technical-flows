@@ -21,40 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (SaaS 
 
 ---
 
-## Canary deployment cho checkout service của sàn e-commerce
-
-**Repository:** `canary-deployment-ecommerce-checkout`
-
-**Hệ thống:** Một sàn e-commerce muốn deploy một thay đổi lớn ở service checkout (thay đổi logic tính phí vận chuyển), rủi ro cao nếu có lỗi vì ảnh hưởng trực tiếp tới doanh thu.
-
-**Vai trò của flow:** Canary deployment cho phép chỉ một phần nhỏ traffic thật đi qua phiên bản mới, tăng dần tỷ lệ nếu ổn định, để giảm thiểu số lượng khách hàng bị ảnh hưởng nếu có lỗi.
-
-**Yêu cầu cụ thể:**
-- Traffic phải được chia theo tỷ lệ có kiểm soát (ví dụ 1% → 5% → 25% → 100%) theo từng giai đoạn, với mỗi giai đoạn được giữ trong một khoảng thời gian tối thiểu để thu thập đủ dữ liệu trước khi tăng tỷ lệ tiếp theo.
-- Định nghĩa các metric kinh doanh quan trọng cần theo dõi trong lúc canary (không chỉ lỗi kỹ thuật 5xx, mà cả tỷ lệ hoàn tất checkout, giá trị đơn hàng trung bình) — vì một lỗi logic tính phí vận chuyển có thể không gây lỗi HTTP nhưng vẫn gây thiệt hại tài chính (tính phí sai).
-- Đảm bảo việc phân chia traffic vào canary không dựa vào yếu tố có thể gây phân biệt bất công giữa khách hàng (ví dụ không cố định luôn cùng một nhóm khách hàng vào canary ở mọi lần deploy) trừ khi có chủ đích test theo phân khúc khách hàng cụ thể.
-- Xử lý trường hợp một khách hàng có nhiều request trong cùng phiên mua hàng (xem giỏ hàng, tính phí, thanh toán) rơi vào cả phiên bản canary và phiên bản cũ ở các bước khác nhau — cần đảm bảo tính nhất quán trong toàn bộ phiên mua hàng của một khách hàng (sticky routing theo session), tránh logic tính phí bị lẫn giữa hai phiên bản.
-- Thiết kế cơ chế rollback tức thời (đưa tỷ lệ canary về 0%) và có khả năng phân tích nhanh dữ liệu đã thu thập được từ canary để quyết định nguyên nhân trước khi thử lại, tránh việc chỉ đơn giản rollback mà không hiểu vì sao lỗi.
-
----
-
-## Canary theo version API cho mobile backend
-
-**Repository:** `canary-deployment-mobile-api-versioning`
-
-**Hệ thống:** Một backend phục vụ app mobile với nhiều version app đang được người dùng sử dụng ngoài thực tế (không thể ép update ngay), backend cần deploy thay đổi API mà một số version app cũ chưa tương thích.
-
-**Vai trò của flow:** Canary ở đây không chỉ chia theo tỷ lệ traffic ngẫu nhiên mà phải phối hợp với version của client, đảm bảo chỉ chuyển sang logic mới cho các client đã tương thích.
-
-**Yêu cầu cụ thể:**
-- Backend phải nhận diện được version app gửi kèm mỗi request (qua header) và route tới logic xử lý phù hợp — version app cũ vẫn nhận được response theo format cũ (backward compatible), version mới nhận được tính năng/format mới.
-- Trong giai đoạn canary, việc bật tính năng mới cho một phần nhỏ user (dù dùng version app đã tương thích) phải kiểm soát được qua feature flag độc lập với việc deploy code, để có thể tắt tính năng ngay lập tức mà không cần rollback toàn bộ deploy.
-- Xử lý trường hợp một user có nhiều thiết bị (đang dùng version app khác nhau trên điện thoại và máy tính bảng) — hành vi ứng dụng nhận được (tính năng mới hay cũ) phải nhất quán và dễ giải thích theo version thiết bị, không phụ thuộc yếu tố khác gây khó hiểu.
-- Đảm bảo có giám sát riêng theo từng version app để phát hiện: nếu một version app cụ thể gặp lỗi tăng vọt sau khi backend deploy phiên bản mới, phải cảnh báo ngay là do sự không tương thích với version đó, không lẫn vào tổng thể toàn hệ thống.
-- Thiết kế chính sách "sunset" rõ ràng cho các version app quá cũ không còn được canary hỗ trợ (backend không đảm bảo tương thích vô thời hạn với mọi version cũ), kèm cơ chế báo cho client version cũ biết cần cập nhật.
-
----
-
 ## Triển khai thay đổi cho hệ thống core banking cần kiểm soát chặt và có thể audit
 
 **Repository:** `deployment-core-banking-audit-controlled`

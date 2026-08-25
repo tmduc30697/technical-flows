@@ -21,40 +21,6 @@ Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau —
 
 ---
 
-## Livestream bán hàng (live shopping) trên nền tảng e-commerce
-
-**Repository:** `live-streaming-live-shopping`
-
-**Hệ thống:** Một tính năng trong app e-commerce cho phép seller livestream giới thiệu sản phẩm, gắn link mua ngay trong lúc live.
-
-**Vai trò của flow:** Nhận luồng live từ seller và phân phối tới người xem với độ trễ thấp, đồng bộ với các sự kiện tương tác (chat, chèn sản phẩm, chốt đơn) diễn ra real-time.
-
-**Yêu cầu cụ thể:**
-- Độ trễ từ lúc seller nói đến lúc viewer thấy/nghe phải đủ thấp để tương tác mua hàng theo thời gian thực có ý nghĩa (ví dụ dưới vài giây), khác với yêu cầu độ trễ của video giải trí thông thường.
-- Sự kiện "chèn sản phẩm lên màn hình" và "chốt đơn số lượng giới hạn" phải được đồng bộ thời gian chính xác với luồng video, không bị lệch so với những gì seller đang nói trên hình.
-- Khi lượng viewer tăng vọt do sản phẩm hot (flash sale trong live), CDN/edge phân phối phải scale ra kịp mà không làm rớt kết nối của viewer đang xem.
-- Nếu luồng ingest bị gián đoạn ngắn, phải có cơ chế hiển thị lại đúng trạng thái đơn hàng/giỏ hàng cho viewer sau khi luồng khôi phục, không làm mất giao dịch đang thực hiện.
-- Ghi lại toàn bộ luồng và log sự kiện tương tác để dùng cho việc tính hoa hồng, xử lý tranh chấp đơn hàng phát sinh trong lúc live sau này.
-
----
-
-## Nền tảng hội thảo trực tuyến/webinar cho doanh nghiệp
-
-**Repository:** `live-streaming-enterprise-webinar`
-
-**Hệ thống:** Một SaaS B2B cho phép tổ chức hội thảo trực tuyến với nhiều presenter, hàng trăm/nghìn người tham dự.
-
-**Vai trò của flow:** Nhận nhiều luồng ingest từ các presenter khác nhau, ghép/chuyển cảnh (switch) giữa các luồng, và phân phối một luồng thống nhất tới người tham dự, đồng thời ghi lại để phát lại sau.
-
-**Yêu cầu cụ thể:**
-- Hỗ trợ nhận đồng thời nhiều luồng ingest từ các presenter (mỗi người một kết nối riêng) và cho phép host chuyển đổi (switch) presenter nào đang được phát chính, không làm giật/đen màn hình phía người xem khi chuyển.
-- Presenter bị rớt kết nối giữa buổi phải được phát hiện và tự động chuyển sang presenter/màn hình chờ khác, không làm dừng toàn bộ webinar.
-- Ghi lại toàn bộ buổi hội thảo (bao gồm cả các lần chuyển presenter) thành một file VOD liên tục, đúng thứ tự, để publish lại cho người không tham dự được.
-- Giới hạn số người tham dự đồng thời theo gói cước của tổ chức; hệ thống phải từ chối người tham dự vượt hạn mức một cách rõ ràng (hàng đợi chờ hoặc thông báo), không làm giảm chất lượng cho người đã vào.
-- Có cơ chế đo và báo cáo độ trễ/chất lượng luồng theo thời gian thực để đội vận hành phát hiện sự cố trước khi người dùng phàn nàn.
-
----
-
 ## Nền tảng phát sóng thể thao kết hợp cá cược trực tiếp
 
 **Repository:** `live-streaming-sports-betting`
@@ -86,20 +52,3 @@ Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau —
 - Nội dung sau khi ingest ở một khu vực phải được nhân bản/phân phối tới các khu vực khác để viewer ở xa vẫn xem được với độ trễ hợp lý, không phải kéo trực tiếp từ điểm ingest gốc.
 - Xử lý được trường hợp streamer di chuyển (đổi mạng, đổi vị trí giữa buổi live) mà điểm ingest tối ưu thay đổi — không được làm rớt stream khi chuyển đổi điểm ingest ngầm.
 - Theo dõi được chi phí băng thông theo từng khu vực địa lý để tối ưu vận hành, cảnh báo khi một khu vực có chi phí bất thường so với số viewer thực tế.
-
----
-
-## Lớp học trực tuyến (EdTech) phát trực tiếp
-
-**Repository:** `live-streaming-edtech-online-class`
-
-**Hệ thống:** Một nền tảng edtech cho giáo viên dạy trực tiếp qua video, học sinh tham gia và tương tác qua chat/tay giơ (raise hand).
-
-**Vai trò của flow:** Nhận luồng live từ giáo viên (và đôi khi từ học sinh khi được gọi phát biểu), phân phối tới lớp học, đồng thời ghi lại buổi học và theo dõi điểm danh dựa trên thời gian tham gia.
-
-**Yêu cầu cụ thể:**
-- Hỗ trợ chuyển đổi giữa luồng chính của giáo viên và luồng của học sinh được gọi lên phát biểu, không làm gián đoạn luồng chính quá lâu khi chuyển đổi qua lại nhiều lần trong một buổi học.
-- Ghi nhận chính xác thời điểm vào/ra của từng học sinh trong luồng live để tính điểm danh, xử lý đúng trường hợp học sinh bị rớt mạng và vào lại nhiều lần (không tính trùng, không tính thiếu thời gian tham gia).
-- Buổi học phải được ghi lại đầy đủ thành VOD ngay sau khi kết thúc để học sinh vắng mặt xem lại, kèm join đúng với danh sách điểm danh đã ghi nhận.
-- Chất lượng luồng phải tự điều chỉnh (giảm bitrate) khi băng thông giáo viên/học sinh yếu, ưu tiên giữ luồng không bị đứng hình hơn là giữ độ phân giải cao.
-- Giới hạn số lớp học live đồng thời theo gói cước của trường/tổ chức, từ chối rõ ràng khi vượt hạn mức thay vì để tất cả các lớp cùng bị giảm chất lượng.

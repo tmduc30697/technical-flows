@@ -38,40 +38,6 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống web khác nhau
 
 ---
 
-## Cập nhật hồ sơ khách hàng trong CRM khi sales và CS cùng thao tác
-
-**Repository:** `locking-crm-customer-record-concurrent`
-
-**Hệ thống:** Một CRM cho phép nhân viên sales và nhân viên customer support (CS) cùng truy cập và chỉnh sửa hồ sơ 1 khách hàng (thông tin liên hệ, ghi chú, trạng thái deal), 2 nhóm này thường thao tác gần như đồng thời khi có sự kiện (khách hàng gọi vào đúng lúc sales đang cập nhật deal).
-
-**Vai trò của flow:** Vì tần suất 2 nhóm cùng sửa 1 hồ sơ trong cùng khung giờ khá cao ở các khách hàng lớn, cần đánh giá kỹ giữa optimistic (rủi ro conflict thường xuyên gây khó chịu) và pessimistic locking (khóa hồ sơ khi 1 người đang sửa) cho từng loại thao tác cụ thể.
-
-**Yêu cầu cụ thể:**
-- Với các trường ít xung đột (ví dụ ghi chú tự do, mỗi người thêm ghi chú riêng không đè lên nhau), dùng append-only (thêm dòng ghi chú mới, không phải sửa đè 1 trường chung) để tránh hoàn toàn nhu cầu locking cho phần này.
-- Với trường có xung đột thực sự (ví dụ trạng thái deal: sales đổi từ "đang thương lượng" sang "chốt deal" đúng lúc CS đổi sang "khách hủy" do vừa nhận được thông tin khách không mua nữa), mô tả cụ thể lý do nên dùng pessimistic locking ngắn hạn (lock hồ sơ trong vài giây khi đang submit thay đổi trạng thái) thay vì optimistic, vì đây là trường quan trọng cần chắc chắn đúng ngay, không muốn 1 bên phải retry sau khi conflict trong lúc đang xử lý khách hàng thực.
-- Mô tả cụ thể triển khai pessimistic lock: khi sales bắt đầu sửa trạng thái deal, hệ thống lock dòng hồ sơ đó (ví dụ `SELECT ... FOR UPDATE` trong transaction ngắn, hoặc advisory lock có TTL để tránh treo vô hạn nếu client rớt kết nối giữa lúc đang giữ lock), CS thao tác cùng lúc phải nhận thông báo "đang được người khác cập nhật, vui lòng thử lại sau vài giây" thay vì chờ vô thời hạn.
-- Quy định rõ TTL tối đa cho pessimistic lock (ví dụ 10 giây) để nếu client giữ lock bị crash/rớt mạng giữa lúc đang sửa, lock phải tự động được giải phóng sau TTL, không khóa hồ sơ vĩnh viễn.
-- Với thông tin liên hệ cơ bản (email, số điện thoại) ít bị 2 người cùng sửa đồng thời, dùng optimistic locking thông thường là đủ — yêu cầu người thiết kế phải phân loại rõ từng trường/nhóm trường trong hồ sơ khách hàng theo chiến lược locking phù hợp (không áp dụng 1 chiến lược chung cho toàn bộ hồ sơ), và giải thích rõ tiêu chí phân loại (tần suất xung đột, mức độ nghiêm trọng nếu conflict xảy ra).
-
----
-
-## Cập nhật tồn kho thủ công bởi nhiều nhân viên kho trong hệ thống quản lý kho
-
-**Repository:** `locking-warehouse-manual-inventory-update`
-
-**Hệ thống:** Một hệ thống quản lý kho cho phép nhiều nhân viên kho cùng thao tác kiểm kho/nhập-xuất hàng qua thiết bị quét mã, thường xảy ra tình huống 2 nhân viên cùng quét mã 1 sản phẩm gần như đồng thời ở 2 khu vực khác nhau.
-
-**Vai trò của flow:** Vì tồn kho là số liệu cần chính xác tuyệt đối và tần suất 2 nhân viên cùng động vào 1 SKU khá thường xuyên trong giờ kiểm kho cao điểm, flow cập nhật tồn kho nên dùng pessimistic locking (hoặc update atomic không cần đọc trước) thay vì optimistic để tránh retry liên tục làm chậm công việc thủ công của nhân viên.
-
-**Yêu cầu cụ thể:**
-- Với thao tác nhập/xuất kho theo số lượng (cộng/trừ, không phải set giá trị tuyệt đối), nên dùng update atomic dạng `UPDATE stock SET qty = qty + delta` thay vì đọc số lượng hiện tại rồi tính rồi ghi đè — cách này tránh hoàn toàn nhu cầu optimistic hay pessimistic lock cho trường hợp cộng/trừ đơn giản, vì phép cộng có tính giao hoán, thứ tự xử lý không ảnh hưởng kết quả cuối.
-- Mô tả cụ thể tình huống CẦN pessimistic lock thật: nhân viên thực hiện "kiểm kho lại toàn bộ" (set giá trị tuyệt đối dựa trên đếm tay thực tế) cho 1 SKU, cần lock SKU đó trong lúc đang đếm và ghi nhận để không có giao dịch nhập/xuất khác chen vào giữa lúc đang kiểm kho gây sai số liệu cuối — mô tả rõ cách lock (khóa theo SKU, có thông báo cho các thiết bị quét khác đang cố thao tác vào SKU đó biết "đang kiểm kho, vui lòng đợi").
-- Nếu nhân viên đang giữ pessimistic lock để kiểm kho nhưng thiết bị quét mã bị mất kết nối mạng (phổ biến trong kho có sóng yếu), lock phải có TTL và tự giải phóng sau khoảng thời gian hợp lý (ví dụ 2 phút), không được để khóa treo cả SKU khiến nhân viên khác không thể nhập/xuất hàng bình thường trong khi nhân viên đầu đã rời khỏi khu vực.
-- Khi 2 nhân viên cùng cố bắt đầu kiểm kho 1 SKU gần như đồng thời (cả 2 đều bấm "Bắt đầu kiểm kho"), chỉ đúng 1 người giữ được lock, người thứ 2 phải nhận thông báo rõ ràng ngay (không phải chờ timeout mới biết) là "SKU này đang được đồng nghiệp X kiểm kho".
-- Có log đầy đủ lịch sử thay đổi tồn kho (ai, khi nào, delta bao nhiêu, loại thao tác gì: nhập/xuất/kiểm kho) để có thể truy vết và tái tính tồn kho từ lịch sử khi phát hiện số liệu bất thường, không phụ thuộc hoàn toàn vào giá trị hiện tại trong 1 cột duy nhất.
-
----
-
 ## Chỉnh sửa cấu hình hệ thống nội bộ (feature flag, config) bởi nhiều kỹ sư
 
 **Repository:** `locking-internal-config-multi-engineer`

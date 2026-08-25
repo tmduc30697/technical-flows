@@ -38,40 +38,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần kiểm soát t�
 
 ---
 
-## Client tôn trọng rate limit của đối tác khi gọi third-party API
-
-**Repository:** `rate-limiting-client-third-party-api`
-
-**Hệ thống:** Một hệ thống backend gọi API của đối tác bên ngoài (ví dụ API vận chuyển, API thanh toán) có giới hạn rate limit nghiêm ngặt từ phía đối tác.
-
-**Vai trò của flow:** Chủ động throttle traffic đi ra (outbound) để không vượt giới hạn đối tác đặt ra, tránh bị đối tác tạm khóa truy cập hoặc phạt.
-
-**Yêu cầu cụ thể:**
-- Hệ thống phải tự giới hạn tốc độ gọi API đối tác đúng theo hạn mức họ công bố (ví dụ 100 request/giây), có buffer an toàn (ví dụ chỉ dùng 90% hạn mức) để tránh sát ngưỡng gây lỗi do đo đếm lệch nhau.
-- Khi nhiều service nội bộ cùng gọi tới API của đối tác đó, phải có một điểm điều tiết tập trung (throttle chung) để tổng traffic không vượt hạn mức, không để mỗi service tự giới hạn riêng dẫn tới tổng vượt quá.
-- Khi bị đối tác trả 429, phải đọc và tuân thủ đúng thời gian chờ họ yêu cầu (Retry-After), và có cơ chế giảm tốc độ gọi tạm thời (backoff) trong một khoảng thời gian sau đó để tránh lặp lại.
-- Có hàng đợi ưu tiên cho các request quan trọng (ví dụ tạo đơn ship thật) hơn các request ít khẩn cấp (ví dụ đồng bộ dữ liệu nền) khi gần chạm hạn mức của đối tác.
-- Giám sát usage thực tế so với hạn mức đối tác theo thời gian thực, cảnh báo sớm khi gần chạm ngưỡng để chủ động liên hệ đối tác tăng hạn mức nếu cần trước khi bị chặn.
-
----
-
-## Giới hạn tốc độ gửi tin nhắn trong app chat để chống spam
-
-**Repository:** `rate-limiting-chat-message-anti-spam`
-
-**Hệ thống:** App chat/messenger cần giới hạn tốc độ user gửi tin nhắn để chống spam, đặc biệt trong group chat lớn.
-
-**Vai trò của flow:** Rate limit theo user và theo conversation để giữ trải nghiệm chat lành mạnh, phân biệt giữa user gõ nhanh tự nhiên và hành vi spam tự động.
-
-**Yêu cầu cụ thể:**
-- Giới hạn số tin nhắn/giây theo user phải đủ rộng để không chặn nhầm người gõ nhanh bình thường (ví dụ cho phép burst ngắn), nhưng chặn được bot gửi hàng loạt liên tục.
-- Với group chat lớn, cần thêm giới hạn tổng số tin nhắn/giây của cả group (không chỉ theo từng user) để tránh nhiều user cùng gửi dồn dập làm nghẽn hiển thị cho tất cả thành viên.
-- User bị rate limit phải nhận phản hồi rõ ràng ngay trên UI (ví dụ "gửi quá nhanh, vui lòng chờ") thay vì tin nhắn bị âm thầm mất không rõ lý do.
-- Phân biệt được rate limit áp dụng cho tin nhắn văn bản thường và các hành động khác (gửi file, tạo poll) — có thể cần ngưỡng riêng vì mức độ ảnh hưởng tài nguyên khác nhau.
-- Có cơ chế phát hiện hành vi spam nâng cao hơn rate limit đơn giản (ví dụ gửi cùng nội dung lặp lại liên tục) để tự động cảnh cáo/tạm khóa tài khoản nghi ngờ là bot, không chỉ dựa vào tốc độ.
-
----
-
 ## Throttling request checkout trong flash sale để bảo vệ hệ thống backend
 
 **Repository:** `rate-limiting-flash-sale-checkout-throttle`

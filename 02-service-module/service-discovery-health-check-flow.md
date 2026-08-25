@@ -21,23 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (nền
 
 ---
 
-## Quản lý fleet thiết bị IoT online/offline
-
-**Repository:** `service-discovery-iot-fleet-health`
-
-**Hệ thống:** Một backend quản lý hàng chục nghìn thiết bị IoT (cảm biến nhiệt độ) kết nối liên tục qua MQTT/WebSocket tới các gateway server.
-
-**Vai trò của flow:** Hệ thống cần biết chính xác thiết bị nào đang online, gateway nào đang giữ kết nối của thiết bị nào, để route lệnh điều khiển tới đúng nơi.
-
-**Yêu cầu cụ thể:**
-- Khi thiết bị connect tới một gateway, gateway phải đăng ký ánh xạ `device_id -> gateway_id` vào một registry chia sẻ (không lưu local), để các service khác biết gửi lệnh qua gateway nào.
-- Phát hiện thiết bị offline không chỉ dựa vào việc gateway đóng kết nối tường minh, mà còn phải xử lý mất kết nối "âm thầm" (thiết bị mất điện, mất sóng) qua heartbeat/keepalive với timeout hợp lý — tránh báo sai "online" khi thiết bị đã chết từ lâu.
-- Khi một gateway server bị restart (deploy mới), toàn bộ thiết bị đang giữ trên gateway đó phải được đánh dấu "cần reconnect" và registry phải dọn sạch mapping cũ, không để lại bản ghi rác gây route sai.
-- Thiết kế cho khả năng mở rộng: registry phải chịu được việc hàng nghìn thiết bị connect/disconnect trong vài giây (ví dụ sau một lần mất điện khu vực rộng) mà không sập hoặc mất dữ liệu trạng thái.
-- Cung cấp API cho phép các service khác truy vấn "thiết bị X đang online ở gateway nào" với latency thấp, và trả lời rõ ràng khi thiết bị không tồn tại trong registry (chưa từng connect vs vừa mất kết nối).
-
----
-
 ## Service discovery đa vùng (multi-region) cho hệ thống thanh toán
 
 **Repository:** `service-discovery-payment-multi-region`
@@ -69,20 +52,3 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (nền
 - Nếu control plane (nơi lưu danh sách service) tạm thời không phản hồi được, sidecar phải dùng danh sách cache gần nhất để tiếp tục hoạt động (fail open có kiểm soát), không được để toàn bộ traffic đứng lại vì mất kết nối tới control plane.
 - Đảm bảo health check không tạo ra tải đáng kể lên chính service bị check (tránh trường hợp health check dày đặc làm chậm thêm service đang yếu) — có backoff khi liên tục fail.
 - Viết cơ chế báo cáo rõ nguyên nhân một pod bị đánh unhealthy (timeout, HTTP 5xx, connection refused) để team vận hành debug nhanh, không chỉ trả về "unhealthy" chung.
-
----
-
-## Discovery cho marketplace có nhiều service scale động theo giờ cao điểm
-
-**Repository:** `service-discovery-marketplace-dynamic-scaling`
-
-**Hệ thống:** Một marketplace online (giống các sàn C2C) có service "search" và "recommendation" tự động scale số instance lên/xuống theo giờ cao điểm trong ngày.
-
-**Vai trò của flow:** Discovery phải theo kịp việc số instance thay đổi liên tục trong ngày, đảm bảo traffic luôn được route tới instance còn sống và tránh gọi vào instance vừa bị scale-down.
-
-**Yêu cầu cụ thể:**
-- Khi autoscaler quyết định giảm số instance, instance bị chọn để tắt phải deregister trước, chờ hết các request đang xử lý (grace period) rồi mới thực sự shutdown — không deregister sau khi đã tắt.
-- Client phải xử lý được trường hợp gọi tới một instance vừa bị loại khỏi registry đúng lúc request đang bay trên đường truyền (registry cập nhật chưa tới nơi) — có retry với instance khác, không throw lỗi trực tiếp cho người dùng cuối.
-- Định nghĩa rõ khoảng thời gian tối đa registry được coi là "stale" trước khi client buộc phải refresh lại toàn bộ danh sách instance từ nguồn gốc.
-- Thiết kế cho trường hợp cả registry chính bị quá tải trong giờ cao điểm (chính registry cũng cần discovery/health check) — không tạo ra single point of failure khi traffic tăng cao nhất.
-- Viết test đo thời gian từ lúc một instance chết đột ngột tới lúc 100% traffic mới không còn route tới nó nữa, đảm bảo nằm trong SLA đã định nghĩa trước.

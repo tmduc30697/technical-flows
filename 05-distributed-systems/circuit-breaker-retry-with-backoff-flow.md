@@ -21,23 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần bảo vệ hệ
 
 ---
 
-## Gọi API vận chuyển bên thứ ba để tính phí/tạo đơn ship
-
-**Repository:** `circuit-breaker-shipping-carrier-api`
-
-**Hệ thống:** Hệ thống order của một nền tảng logistics gọi API của nhiều đối tác vận chuyển (nhiều hãng khác nhau) để lấy giá và tạo shipment.
-
-**Vai trò của flow:** Circuit breaker riêng cho từng đối tác vận chuyển để một hãng bị lỗi không làm chậm việc chọn hãng khác, kết hợp retry để xử lý lỗi tạm thời của từng hãng.
-
-**Yêu cầu cụ thể:**
-- Mỗi đối tác vận chuyển phải có circuit breaker độc lập — hãng A bị lỗi liên tục không được ảnh hưởng tới việc gọi hãng B, C.
-- Khi breaker của một hãng mở, hệ thống phải tự động loại hãng đó khỏi danh sách gợi ý giá cho user trong khoảng thời gian breaker mở, và tự thêm lại khi breaker đóng trở lại.
-- Retry cho từng lời gọi API tính giá phải có timeout tổng cộng rõ ràng (ví dụ tối đa 3 giây kể cả retry) để không làm user chờ quá lâu ở màn hình checkout.
-- Với API tạo shipment (có side-effect, không idempotent theo mặc định), phải dùng idempotency key riêng cho mỗi lần tạo đơn để retry an toàn không tạo shipment trùng.
-- Có dashboard theo dõi trạng thái breaker của từng đối tác theo thời gian thực, giúp team vận hành biết ngay khi một hãng vận chuyển đang gặp sự cố.
-
----
-
 ## SaaS gọi LLM/AI provider bên thứ ba cho tính năng chat AI
 
 **Repository:** `circuit-breaker-llm-provider-chat-ai`
@@ -52,23 +35,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần bảo vệ hệ
 - Circuit breaker mở khi tỉ lệ lỗi/timeout của provider vượt ngưỡng, và hệ thống phải có fallback rõ ràng khi breaker mở (ví dụ chuyển sang provider dự phòng thứ hai, hoặc trả thông báo lỗi thân thiện cho user thay vì treo loading vô hạn).
 - Phải phân biệt và không retry với lỗi do chính request của user sai (ví dụ input vượt quá giới hạn token, prompt bị filter) — retry những lỗi này chỉ tốn thời gian mà không giải quyết được gì.
 - Đo lường: latency thêm vào do retry (retry overhead), tỉ lệ request phải fallback sang provider dự phòng, và chi phí phát sinh do retry để đưa vào theo dõi ngân sách AI.
-
----
-
-## Ride-hailing gọi API bản đồ/geocoding bên thứ ba
-
-**Repository:** `circuit-breaker-ride-hailing-maps-geocoding`
-
-**Hệ thống:** App gọi xe cần gọi API bản đồ bên ngoài để tính route, ETA, geocode địa chỉ cho mỗi chuyến đi.
-
-**Vai trò của flow:** Circuit breaker + retry đảm bảo khi provider bản đồ chậm/lỗi tạm thời, luồng đặt xe vẫn hoạt động được (qua fallback hoặc cache) thay vì chặn cứng người dùng không đặt được xe.
-
-**Yêu cầu cụ thể:**
-- Có cache kết quả geocode/route gần đây (theo khu vực) để dùng làm fallback tạm thời khi provider chính bị circuit breaker mở, dù độ chính xác giảm nhẹ vẫn tốt hơn chặn hoàn toàn tính năng.
-- Timeout cho mỗi lời gọi API bản đồ phải rất ngắn (vài trăm ms) vì đây là lời gọi trên critical path của việc đặt xe — không được để user chờ nhiều giây chỉ để tính route.
-- Retry phải có giới hạn tổng thời gian rất chặt (budget thời gian cho toàn bộ retry loop), ưu tiên trả kết quả "đủ tốt" (approximate) nhanh hơn là chờ kết quả chính xác nhưng chậm.
-- Nếu có nhiều provider bản đồ (chính + dự phòng), circuit breaker của provider chính mở phải tự động chuyển toàn bộ traffic sang provider dự phòng ngay, và có cơ chế dò lại provider chính định kỳ để chuyển về khi ổn định trở lại.
-- Đo lường: tỉ lệ request phải dùng fallback/cache thay vì dữ liệu real-time, và tác động của việc dùng dữ liệu cũ lên độ chính xác ETA hiển thị cho user.
 
 ---
 

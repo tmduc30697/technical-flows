@@ -21,40 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần chia dữ liệ
 
 ---
 
-## Sharding session store cho hệ thống đăng nhập quy mô lớn
-
-**Repository:** `consistent-hashing-session-store-sharding`
-
-**Hệ thống:** Một platform có hàng chục triệu session đang active, cần chia session ra nhiều node lưu trữ để không một node nào quá tải.
-
-**Vai trò của flow:** Consistent hashing theo session ID/user ID để xác định node lưu session, đảm bảo việc scale node không làm invalidate hàng loạt session đang hoạt động của user.
-
-**Yêu cầu cụ thể:**
-- Session của một user phải luôn map về đúng node xác định (deterministic) dựa trên session key, để bất kỳ instance API nào cũng tìm đúng node lưu session đó mà không cần broadcast.
-- Khi một node lưu session chết, phải có replica/backup rõ ràng (ví dụ mỗi session ghi vào 2 node kế tiếp trên ring) để không làm user tự động bị logout khi node chết.
-- Việc thêm/bớt node không được làm invalidate session của user không liên quan tới node bị thay đổi (chỉ ảnh hưởng đúng phần dữ liệu thuộc range bị dịch chuyển).
-- Đo lường phân bổ tải giữa các node (độ lệch chuẩn số session/node) sau khi scale, đảm bảo không có node nào gánh quá X% tải trung bình.
-- Có cơ chế giám sát và tự động rebalance nếu phát hiện một node bị lệch tải quá ngưỡng do virtual node phân bổ không đều.
-
----
-
-## Sharding cho distributed rate limiter quy mô lớn
-
-**Repository:** `consistent-hashing-rate-limiter-sharding`
-
-**Hệ thống:** Một API gateway phục vụ hàng nghìn client, cần rate limit theo client/API key với counter được lưu phân tán trên nhiều node để chịu tải.
-
-**Vai trò của flow:** Consistent hashing route request rate-limit-check của một client về đúng node giữ counter cho client đó, tránh cần đồng bộ toàn cục cho mỗi request.
-
-**Yêu cầu cụ thể:**
-- Mỗi client key phải map ổn định về đúng 1 (hoặc N) node chịu trách nhiệm counter cho key đó, giảm thiểu network hop khi check rate limit ở tần suất cao.
-- Khi node giữ counter chết, phải định nghĩa rõ hành vi: fail-open (cho qua tạm, có thể vượt limit ngắn hạn) hay fail-closed (chặn tạm, an toàn hơn nhưng ảnh hưởng trải nghiệm) — và implement được cả logging cho quyết định này.
-- Khi thêm node mới vào cụm rate limiter, client đang gần chạm limit không được bị "reset" limit về 0 một cách bất công (mất lịch sử counter khi bị chuyển node).
-- Đo throughput tối đa hệ thống rate limiter xử lý được (request check/giây) và latency thêm vào mỗi request do bước hash + route.
-- Test rebalance khi số node tăng gấp đôi, đảm bảo tải phân bổ đều và không có node nào bị nghẽn ("hot key" của một client có traffic rất lớn).
-
----
-
 ## Sharding lưu trữ time-series metrics theo thời gian và theo nguồn
 
 **Repository:** `consistent-hashing-time-series-metrics`

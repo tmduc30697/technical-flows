@@ -21,57 +21,6 @@ Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau —
 
 ---
 
-## Marketplace đối soát payout cho seller giữa ví nội bộ và ngân hàng
-
-**Repository:** `reconciliation-marketplace-seller-payout`
-
-**Hệ thống:** Một marketplace giữ số dư (ví nội bộ) cho từng seller từ doanh thu bán hàng, định kỳ chuyển tiền (payout) ra tài khoản ngân hàng của seller.
-
-**Vai trò của flow:** Đối soát giữa số tiền được ghi nhận đã chuyển đi từ hệ thống nội bộ và số tiền thực tế ngân hàng xác nhận đã chuyển thành công tới seller.
-
-**Yêu cầu cụ thể:**
-- Mỗi lệnh payout phải theo dõi được đủ 3 trạng thái: đã tạo lệnh nội bộ, đã gửi tới ngân hàng, và ngân hàng xác nhận thành công/thất bại — đối soát phải phát hiện được lệnh bị "treo" ở trạng thái giữa quá lâu.
-- Khi ngân hàng báo lệnh chuyển thất bại (sai số tài khoản, tài khoản đóng), số tiền phải được hoàn lại đúng vào ví nội bộ của seller và không được coi là "đã chi" trong đối soát doanh thu tổng.
-- Không được tạo ra hai lệnh payout cho cùng một seller với cùng một kỳ thanh toán dù job payout bị chạy lại do lỗi hệ thống (idempotency theo seller + kỳ thanh toán).
-- Tổng số tiền payout theo đối soát phải khớp chính xác với tổng doanh thu seller đã ghi nhận trừ đi phí hoa hồng và các khoản giữ lại (hold do tranh chấp/hoàn hàng) — có báo cáo chi tiết breakdown khi có sai lệch.
-- Cung cấp cho seller lịch sử payout minh bạch (đã nhận, đang xử lý, thất bại kèm lý do) để giảm ticket hỗ trợ, và đội vận hành có công cụ tra soát một payout cụ thể xuyên suốt cả ba hệ thống liên quan.
-
----
-
-## SaaS thuê bao đối soát giữa Stripe subscription và billing ledger nội bộ
-
-**Repository:** `reconciliation-saas-stripe-billing-ledger`
-
-**Hệ thống:** Một SaaS B2B tính phí thuê bao hàng tháng qua Stripe, đồng thời duy trì một billing ledger nội bộ để tính doanh thu công nhận (revenue recognition) và báo cáo tài chính.
-
-**Vai trò của flow:** Đối soát giữa các sự kiện thanh toán/gia hạn/hủy từ Stripe và bản ghi tương ứng trong billing ledger nội bộ để đảm bảo doanh thu ghi nhận chính xác.
-
-**Yêu cầu cụ thể:**
-- Mọi sự kiện từ Stripe (thanh toán thành công, thất bại, subscription bị downgrade/upgrade, hủy) phải được webhook nhận và phản ánh vào ledger nội bộ; đối soát định kỳ phải phát hiện được sự kiện nào bị thiếu do webhook lỗi/timeout.
-- Xử lý đúng trường hợp khách hàng nâng/hạ cấp gói giữa kỳ thanh toán (proration) — số tiền ghi nhận trong ledger phải khớp với cách Stripe tính proration, không tính sai lệch dẫn đến báo cáo doanh thu sai.
-- Khi Stripe retry một thanh toán thất bại (dunning) nhiều lần trước khi thành công hoặc hủy hẳn, ledger nội bộ phải phản ánh đúng trạng thái cuối cùng, không ghi nhận doanh thu ở các lần thử thất bại trung gian.
-- Đối soát phải chạy được theo từng kỳ kế toán (tháng/quý) và tạo ra báo cáo sai lệch có thể dùng trực tiếp cho mục đích kế toán, không chỉ là log kỹ thuật khó đọc cho người không chuyên.
-- Webhook trùng lặp từ Stripe (gửi lại cùng một event do retry ở phía Stripe) không được làm ghi nhận doanh thu hai lần trong ledger — phải khử trùng theo event ID.
-
----
-
-## Ứng dụng gọi xe đối soát doanh thu giữa tài xế, phí platform, và bên xử lý thanh toán
-
-**Repository:** `reconciliation-ride-hailing-driver-revenue`
-
-**Hệ thống:** Một app gọi xe có ba bên liên quan đến tiền của mỗi chuyến đi: khách trả tiền qua cổng thanh toán, platform giữ lại phần trăm hoa hồng, và tài xế nhận phần còn lại.
-
-**Vai trò của flow:** Đối soát số tiền của từng chuyến đi qua ba bên để đảm bảo tổng tiền thu từ khách đúng bằng tổng tiền chia cho tài xế cộng hoa hồng platform, không có khoản nào biến mất hoặc trùng lặp.
-
-**Yêu cầu cụ thể:**
-- Với mỗi chuyến đi, đối soát phải xác nhận: số tiền cổng thanh toán ghi nhận đã thu từ khách = số tiền ghi vào tài khoản tài xế + hoa hồng platform + các khoản phụ phí/khuyến mãi áp dụng, sai lệch dù nhỏ cũng phải được gắn cờ.
-- Xử lý đúng các chuyến đi bị hủy giữa đường hoặc bị tranh chấp (khách khiếu nại tính sai tiền) — phần tiền đã tạm giữ/tạm chia cho tài xế phải được điều chỉnh lại đúng khi tranh chấp được giải quyết, và đối soát phải phản ánh trạng thái "đang tranh chấp" riêng biệt.
-- Khuyến mãi/giảm giá (mã giảm giá, trợ giá theo khu vực) áp dụng cho chuyến đi phải được tính đúng vào phần chênh lệch giữa tiền khách trả và tiền tài xế nhận, không để platform tự chịu lỗ số liệu không rõ nguồn hoặc tính nhầm vào phần tài xế.
-- Payout cho tài xế thường được gộp theo lô (nhiều chuyến đi trong một kỳ trả tiền) — đối soát phải truy được ngược từ một lô payout về đúng danh sách chuyến đi cấu thành, phục vụ tra soát khi tài xế khiếu nại về một chuyến cụ thể.
-- Báo cáo đối soát tổng theo ngày/tuần phải khớp với báo cáo tài chính tổng của công ty; mọi sai lệch giữa hai báo cáo phải được điều tra và có nguyên nhân gốc trước khi đóng sổ kỳ đó.
-
----
-
 ## Ngân hàng số đối soát giao dịch với đối tác thanh toán/mạng thẻ
 
 **Repository:** `reconciliation-digital-bank-card-network`

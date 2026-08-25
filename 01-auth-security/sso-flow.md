@@ -38,40 +38,6 @@ Các đề bài dưới đây đi từ vai trò **Service Provider (SP)** tích 
 
 ---
 
-## Nền tảng giáo dục trực tuyến với nhiều app con dùng chung tài khoản
-
-**Repository:** `sso-edtech-shared-account`
-
-**Hệ thống:** Một nền tảng học trực tuyến có nhiều sản phẩm riêng biệt (app học viên, app giảng viên, cổng thi thử, forum thảo luận) dùng chung một hệ thống tài khoản người dùng.
-
-**Vai trò của flow:** Nền tảng tự làm Identity Provider cho hệ sinh thái sản phẩm của chính mình, cho phép người dùng chuyển qua lại giữa các app con mà chỉ cần đăng nhập một lần trên trình duyệt.
-
-**Yêu cầu cụ thể:**
-- Một tài khoản có thể mang nhiều vai trò khác nhau ở các app con (vừa là học viên ở app A, vừa là giảng viên ở app B) — token/session phải mang đủ thông tin để mỗi app tự quyết định quyền truy cập.
-- Xử lý được trường hợp người dùng mở nhiều app con cùng lúc trên nhiều tab, đảm bảo không tạo ra nhiều session trùng lặp không cần thiết ở IdP.
-- Access token dùng cho các app con phải có thời hạn ngắn, kèm refresh token/refresh session để duy trì trải nghiệm "luôn đăng nhập" mà không lộ token dài hạn cho từng app.
-- Khi người dùng đổi email/password ở app chính, tất cả session SSO đang hoạt động ở app con phải được yêu cầu xác thực lại.
-- Thiết kế cho khả năng mở rộng: thêm một app con mới vào hệ sinh thái không cần sửa logic ở IdP trung tâm, chỉ cần đăng ký app như một client mới.
-
----
-
-## Cổng thông tin y tế cho nhân viên nhiều bệnh viện trong một hệ thống y tế
-
-**Repository:** `sso-healthcare-multi-hospital-portal`
-
-**Hệ thống:** Một hệ thống y tế có nhiều bệnh viện/chi nhánh, mỗi chi nhánh dùng Active Directory riêng, nhưng cần một cổng thông tin chung để nhân viên y tế truy cập hồ sơ bệnh án điện tử.
-
-**Vai trò của flow:** Cổng thông tin đóng vai trò Service Provider tích hợp SSO với AD Federation Services (ADFS/SAML) của từng chi nhánh, đồng thời phải đáp ứng yêu cầu tuân thủ nghiêm ngặt về bảo mật dữ liệu y tế.
-
-**Yêu cầu cụ thể:**
-- Session SSO phải có thời gian hết hạn ngắn hơn nhiều so với SSO thông thường (ví dụ 15 phút không hoạt động) và tự động đăng xuất khi máy trạm khoá màn hình.
-- Phải hỗ trợ step-up: một số hành vi nhạy cảm (xem hồ sơ bệnh nhân VIP, xuất dữ liệu) yêu cầu xác thực lại dù session SSO còn hạn.
-- Nếu ADFS của một chi nhánh gặp sự cố, nhân viên chi nhánh đó không được tự động fallback sang đăng nhập bằng password không an toàn — phải có quy trình dự phòng được kiểm soát riêng.
-- Mọi lần SSO thành công/thất bại phải ghi log đầy đủ (ai, chi nhánh nào, thời gian, IP) để đáp ứng audit trail theo quy định y tế.
-- Định danh nhân viên từ SAML assertion phải được map đúng với vai trò chuyên môn (bác sĩ, điều dưỡng, admin) đã lưu sẵn trong hệ thống, không suy ra quyền chỉ từ group AD một cách máy móc.
-
----
-
 ## Fintech cho phép SSO giữa web, mobile app và đối tác nhúng (embedded finance)
 
 **Repository:** `sso-fintech-embedded-finance`

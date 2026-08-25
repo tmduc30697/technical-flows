@@ -21,23 +21,6 @@ Các đề bài dưới đây đi qua nhiều loại yếu tố xác thực th�
 
 ---
 
-## B2B SaaS với MFA tùy chọn cho user thường, bắt buộc cho admin
-
-**Repository:** `mfa-b2b-saas-admin-required`
-
-**Hệ thống:** Một SaaS quản lý bán hàng (CRM) cho doanh nghiệp nhỏ, có nhiều role: sales rep, manager, account owner/admin.
-
-**Vai trò của flow:** MFA tùy chọn cho user thường nhưng bắt buộc cho role admin/owner (những người có quyền quản lý billing, user, tích hợp API).
-
-**Yêu cầu cụ thể:**
-- Hệ thống phải tự phát hiện khi một user được nâng lên role admin và bắt họ enroll MFA trước khi được giữ nguyên quyền admin (không cho "admin không MFA" tồn tại).
-- Cung cấp recovery code (một bộ mã dùng một lần) khi enroll MFA, cảnh báo rõ user phải lưu ở nơi an toàn, và cho phép dùng đúng một lần mỗi mã.
-- Admin công ty có thể cấu hình policy bắt buộc MFA cho toàn bộ nhân viên trong tenant của họ, và hệ thống phải chặn đăng nhập của user chưa enroll khi policy này được bật.
-- Khi user mất cả thiết bị TOTP và toàn bộ recovery code, phải có quy trình khôi phục có kiểm soát (ví dụ xác minh qua admin khác trong công ty) thay vì tự động disable MFA.
-- Test race condition: hai request đồng thời cùng dùng một recovery code — chỉ một được chấp nhận, request sau phải bị từ chối dù trong cùng millisecond.
-
----
-
 ## Công cụ nội bộ DevOps bắt buộc hardware security key cho tài khoản đặc quyền
 
 **Repository:** `mfa-devops-hardware-key-privileged`
@@ -55,23 +38,6 @@ Các đề bài dưới đây đi qua nhiều loại yếu tố xác thực th�
 
 ---
 
-## Mạng xã hội triển khai MFA dạng push notification cho toàn bộ user
-
-**Repository:** `mfa-social-push-notification`
-
-**Hệ thống:** Một mạng xã hội với hàng triệu người dùng, muốn tăng bảo mật bằng MFA dạng push notification (giống Duo/Authy) qua app đồng hành trên điện thoại.
-
-**Vai trò của flow:** Cho phép người dùng phổ thông (không rành kỹ thuật) enroll và dùng MFA một cách thuận tiện, đồng thời có phương án phục hồi khi mất điện thoại — trọng tâm là trải nghiệm ở quy mô lớn.
-
-**Yêu cầu cụ thể:**
-- Khi đăng nhập từ thiết bị mới, gửi push notification tới thiết bị đã đăng ký kèm thông tin ngữ cảnh (vị trí ước lượng, loại thiết bị đang đăng nhập) để user nhận biết đúng/sai request.
-- Push request phải tự hết hạn sau một khoảng thời gian ngắn nếu user không phản hồi, tránh tồn đọng request cũ có thể bị approve nhầm sau này.
-- Phải chống được "MFA fatigue attack" (kẻ tấn công gửi liên tục nhiều push request hy vọng user bấm chấp nhận nhầm) bằng rate limiting và yêu cầu nhập số khớp (number matching) thay vì chỉ bấm "Approve".
-- Cho phép enroll nhiều thiết bị nhận push cùng lúc (ví dụ điện thoại chính + máy tính bảng), và revoke được từng thiết bị riêng lẻ.
-- Quy trình phục hồi khi mất điện thoại phải xác minh danh tính qua ít nhất hai tín hiệu độc lập khác (ví dụ email đã xác minh lâu năm + trả lời thông tin tài khoản) trước khi cho enroll lại thiết bị MFA mới, để tránh social engineering.
-
----
-
 ## Nền tảng y tế từ xa với MFA thích ứng theo rủi ro (risk-based/adaptive)
 
 **Repository:** `mfa-telehealth-risk-based`
@@ -86,20 +52,3 @@ Các đề bài dưới đây đi qua nhiều loại yếu tố xác thực th�
 - Khi điểm rủi ro cao bất thường (ví dụ đăng nhập từ hai quốc gia cách nhau vài phút), phải chặn và yêu cầu xác minh bổ sung mạnh hơn (ví dụ liên hệ hỗ trợ) thay vì chỉ hỏi lại OTP thông thường.
 - Toàn bộ quyết định yêu cầu/miễn MFA của mỗi lần đăng nhập phải được log lại kèm lý do (rủi ro thấp/cao, tín hiệu nào kích hoạt) để phục vụ audit compliance.
 - Nếu dịch vụ tính điểm rủi ro gặp lỗi hoặc timeout, hệ thống phải fail-safe về yêu cầu MFA đầy đủ, không được mặc định bỏ qua MFA vì lỗi hạ tầng.
-
----
-
-## App ngân hàng di động dùng biometric làm yếu tố thứ hai
-
-**Repository:** `mfa-mobile-banking-biometric`
-
-**Hệ thống:** Một app ngân hàng thuần di động (mobile-only), người dùng đăng nhập bằng password rồi xác thực thêm bằng Face ID/fingerprint ngay trên thiết bị.
-
-**Vai trò của flow:** Biometric đóng vai trò yếu tố thứ hai gắn với thiết bị cụ thể, cần fallback OTP khi biometric không khả dụng và xử lý khi người dùng đổi thiết bị.
-
-**Yêu cầu cụ thể:**
-- Dữ liệu biometric không được rời khỏi thiết bị (chỉ dùng secure enclave/keystore của hệ điều hành để ký một challenge từ server) — server không bao giờ lưu hoặc nhận dữ liệu sinh trắc học thô.
-- Khi người dùng đổi điện thoại mới, phải yêu cầu xác thực lại bằng phương thức khác (OTP qua SMS/email đã xác minh trước) trước khi cho đăng ký biometric trên thiết bị mới, và tự động vô hiệu binding biometric cũ trên thiết bị cũ.
-- Nếu biometric thất bại nhiều lần liên tiếp (do vân tay/khuôn mặt không khớp), phải fallback về nhập OTP mà không tự động khóa tài khoản chỉ vì lỗi phần cứng đọc biometric.
-- Phát hiện và chặn trường hợp app chạy trên thiết bị đã root/jailbreak cố gắng giả lập kết quả xác thực biometric thành công.
-- Ghi log mỗi lần binding/unbinding biometric với một thiết bị (thời gian, model thiết bị) để người dùng có thể tự xem lại trong phần "Thiết bị đã xác thực" của app.

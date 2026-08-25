@@ -21,40 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần giữ cache đ�
 
 ---
 
-## Cache profile/feed cho mạng xã hội
-
-**Repository:** `cache-invalidation-social-profile-feed`
-
-**Hệ thống:** Mạng xã hội cache thông tin profile và feed bài viết để giảm tải khi user xem trang cá nhân/newsfeed liên tục.
-
-**Vai trò của flow:** Invalidate cache khi user cập nhật profile hoặc có bài viết mới, cân bằng giữa độ mới của dữ liệu và hiệu năng đọc ở quy mô rất lớn.
-
-**Yêu cầu cụ thể:**
-- Khi user đổi avatar/tên hiển thị, cache profile của chính họ phải invalidate ngay, nhưng cache trong feed của người khác (nơi hiển thị tên/avatar cũ của họ trong bài post cũ) có thể chấp nhận độ trễ ngắn (vài phút) — nêu rõ mức độ trễ chấp nhận được cho từng loại cache.
-- Với user có lượng follower rất lớn (celebrity), việc invalidate cache profile không được gây spike tải đột ngột lên DB do hàng loạt cache ở nhiều nơi cùng miss đồng thời.
-- Định nghĩa rõ cấp độ cache nào bắt buộc invalidate ngay (dữ liệu bảo mật/quyền riêng tư, ví dụ đổi trạng thái tài khoản private) và cấp độ nào có thể chấp nhận eventually consistent (số lượng like, follower count).
-- Xử lý cache ở tầng CDN (cache HTML/API response ở edge) khác với cache ở tầng application (Redis) — phải có chiến lược invalidate riêng cho từng tầng vì CDN thường có độ trễ purge cao hơn.
-- Có công cụ debug cho phép kiểm tra nhanh "vì sao dữ liệu này chưa cập nhật" — trace được cache đang nằm ở tầng nào, TTL còn lại bao nhiêu.
-
----
-
-## Cache trang CMS/blog với nhiều tầng cache (CDN + application)
-
-**Repository:** `cache-invalidation-cms-multi-layer`
-
-**Hệ thống:** Trang tin tức/blog cache nội dung bài viết ở nhiều tầng (CDN edge, application cache, browser cache) để phục vụ lượng đọc lớn với chi phí thấp.
-
-**Vai trò của flow:** Invalidate đồng bộ giữa các tầng cache khi bài viết được sửa/xóa/gỡ (ví dụ do lỗi biên tập cần gỡ khẩn), đảm bảo không còn tầng nào phục vụ nội dung cũ/đã gỡ.
-
-**Yêu cầu cụ thể:**
-- Khi biên tập viên bấm "gỡ bài" (unpublish), request purge phải được gửi tới tất cả tầng cache (CDN, app cache) và xác nhận thành công ở toàn bộ, không chỉ "bắn và quên" (fire-and-forget) vì bài gỡ khẩn thường liên quan tới vấn đề pháp lý/nhạy cảm.
-- Có timeout/retry rõ ràng cho việc purge CDN (một số CDN provider purge không tức thời) và có cách kiểm tra xác nhận đã purge thành công thực sự (không chỉ tin API trả 200).
-- Với sửa nội dung thông thường (không khẩn cấp), có thể chấp nhận cache tồn tại thêm vài phút để tối ưu chi phí purge, nhưng phải phân biệt rõ 2 loại action (gỡ khẩn vs sửa thường) trong hệ thống.
-- Xử lý được trường hợp một bài viết có nhiều URL/biến thể cache (AMP version, mobile version, các ngôn ngữ khác nhau) — invalidate phải cover đủ tất cả biến thể liên quan tới bài viết đó.
-- Có audit log ghi lại mọi lần purge cache khẩn cấp (ai bấm, bài nào, lúc nào) để phục vụ điều tra khi có sự cố nội dung.
-
----
-
 ## Cache session/permission cho hệ thống phân quyền
 
 **Repository:** `cache-invalidation-session-permission`

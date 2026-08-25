@@ -21,23 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần đảm bảo d�
 
 ---
 
-## Durability cho message queue broker tự xây
-
-**Repository:** `wal-custom-message-broker`
-
-**Hệ thống:** Broker message queue tự phát triển cần đảm bảo message đã được producer gửi và ack thành công thì không bao giờ mất, dù broker crash ngay sau đó.
-
-**Vai trò của flow:** WAL ghi message vào log trước khi trả ack cho producer, và dùng log này để phục hồi lại queue state (message nào đã ack, đã consume, chưa consume) sau crash.
-
-**Yêu cầu cụ thể:**
-- Producer chỉ nhận ack "message đã lưu an toàn" sau khi WAL fsync xong; nếu broker crash trước khi fsync, producer coi như chưa gửi thành công và phải retry theo logic riêng.
-- WAL phải phân biệt được các trạng thái message (received, delivered-to-consumer, acked-by-consumer) để sau crash biết chính xác message nào cần gửi lại cho consumer, tránh gửi trùng không cần thiết hoặc mất message chưa được consumer ack.
-- Recovery sau crash phải hoàn thành trong thời gian giới hạn rõ ràng (ví dụ dưới 30 giây cho 1 triệu message chưa checkpoint) để không ảnh hưởng SLA uptime của hệ thống dùng queue.
-- Có giới hạn kích thước WAL trước khi bắt buộc checkpoint/compact, tránh đĩa đầy làm broker không ghi được log mới và toàn hệ thống bị chặn ghi.
-- Test rõ kịch bản mất điện đột ngột (không kịp flush OS buffer) — nêu rõ mức durability guarantee thực tế theo cấu hình fsync (mỗi write vs định kỳ) và trade-off hiệu năng tương ứng.
-
----
-
 ## WAL cho transaction log tài khoản ngân hàng số
 
 **Repository:** `wal-digital-bank-transaction-log`
@@ -52,23 +35,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần đảm bảo d�
 - Recovery sau crash phải là toàn-hoặc-không cho mỗi transaction (atomic) — không có trường hợp một giao dịch chuyển tiền chỉ trừ tiền người gửi mà chưa cộng tiền người nhận sau khi phục hồi.
 - Phải log đủ thông tin để có thể replay ra một audit trail đầy đủ, phục vụ đối soát với ngân hàng đối tác/cơ quan quản lý sau này.
 - Đo lường: RPO (recovery point objective, lượng dữ liệu tối đa có thể mất) phải bằng 0 cho transaction đã ack thành công, và RTO (thời gian phục hồi) phải được benchmark cụ thể theo kích thước log thực tế.
-
----
-
-## Order processing service dùng cache in-memory với WAL để tăng tốc
-
-**Repository:** `wal-order-processing-in-memory-cache`
-
-**Hệ thống:** Service xử lý đơn hàng giữ trạng thái đơn hàng đang xử lý trong memory để tăng tốc, nhưng cần WAL để không mất trạng thái khi service restart/crash bất ngờ.
-
-**Vai trò của flow:** Mọi thay đổi trạng thái đơn hàng trong memory phải được ghi WAL trước, để khi service crash và restart có thể rebuild lại đúng trạng thái in-memory từ log.
-
-**Yêu cầu cụ thể:**
-- Sau khi service restart, phải replay WAL để rebuild chính xác toàn bộ đơn hàng đang "in-flight" (chưa hoàn tất) tại thời điểm crash, không được coi các đơn đó là mất/hủy.
-- Đảm bảo throughput ghi WAL đủ cao để không trở thành cổ chai (ví dụ group commit — batch nhiều write cùng lúc rồi fsync 1 lần) trong khi vẫn giữ đúng đảm bảo durability.
-- Có giới hạn rõ ràng về việc bao lâu thì checkpoint trạng thái in-memory ra snapshot để giảm thời gian replay WAL khi restart (trade-off giữa overhead checkpoint và thời gian recovery).
-- Test kịch bản OOM-kill (process bị hệ điều hành kill do hết memory) — đảm bảo WAL đã ghi trước đó vẫn đủ để phục hồi đúng, không phụ thuộc vào việc process có kịp cleanup gì trước khi chết.
-- Expose metric giám sát độ trễ giữa lúc thay đổi state và lúc WAL được fsync xong (write latency), và cảnh báo khi disk I/O trở thành bottleneck.
 
 ---
 

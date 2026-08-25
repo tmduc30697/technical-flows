@@ -21,23 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (SaaS 
 
 ---
 
-## Theo dõi hành trình một đơn hàng qua các service của e-commerce
-
-**Repository:** `distributed-tracing-ecommerce-order-journey`
-
-**Hệ thống:** Một sàn e-commerce có luồng đặt hàng đi qua `order-service`, `inventory-service`, `payment-service`, `shipping-service`, mỗi service log riêng và có thể scale độc lập.
-
-**Vai trò của flow:** Khi một khách hàng báo "đơn hàng của tôi bị treo", team vận hành cần dùng trace để xác định chính xác bước nào trong 4 service trên đang chậm hoặc lỗi, không cần grep log từng service một cách thủ công.
-
-**Yêu cầu cụ thể:**
-- Mỗi span phải ghi lại đủ thông tin để phân biệt lỗi do logic nghiệp vụ (ví dụ hết hàng) với lỗi hạ tầng (timeout, connection refused) — hai loại này cần cách xử lý cảnh báo khác nhau.
-- Đo và ghi lại latency riêng biệt cho từng bước, đồng thời tổng hợp được latency toàn trình (end-to-end) của một order, để phân biệt "chậm ở một bước" với "chậm tích lũy đều ở mọi bước".
-- Xử lý được các bước xử lý bất đồng bộ (ví dụ payment callback tới sau vài phút qua webhook) mà vẫn liên kết đúng vào trace ban đầu của đơn hàng đó, không tạo thành trace rời rạc riêng.
-- Định nghĩa cơ chế sampling: không nhất thiết trace 100% request (chi phí lưu trữ lớn), nhưng phải đảm bảo 100% các trace có lỗi (error) hoặc latency vượt ngưỡng được giữ lại đầy đủ (tail-based sampling), không bị bộ lọc sampling ngẫu nhiên bỏ qua.
-- Cung cấp khả năng tra cứu nhanh: từ `order_id` của khách hàng, tìm ra đúng `trace_id` liên quan (cần lưu mapping này) để hỗ trợ khi khách hàng khiếu nại mà không biết trace_id kỹ thuật.
-
----
-
 ## Observability cho pipeline xử lý giao dịch fintech cần audit chặt
 
 **Repository:** `distributed-tracing-fintech-audit-observability`
@@ -52,23 +35,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (SaaS 
 - Xử lý trường hợp một bước trong pipeline gọi ra một service bên thứ ba (ngân hàng đối tác) có độ trễ cao và không kiểm soát được — span phải ghi rõ đây là external call, tách biệt để không tính nhầm vào SLA nội bộ.
 - Thiết kế cảnh báo tự động khi một giao dịch có trace "dừng bất thường" giữa chừng (ví dụ span "ledger-write" không có bước tiếp theo trong X giây) — dấu hiệu có thể là giao dịch bị treo cần can thiệp thủ công.
 - Đảm bảo việc thu thập trace không làm tăng đáng kể latency của chính giao dịch (tracing overhead phải được đo và giữ dưới một ngưỡng phần trăm cụ thể so với latency gốc).
-
----
-
-## Mobile backend gọi nhiều API bên thứ ba (thanh toán, bản đồ, SMS)
-
-**Repository:** `distributed-tracing-mobile-backend-third-party-apis`
-
-**Hệ thống:** Backend cho một app mobile đặt xe, mỗi request đặt xe phải gọi tới cổng thanh toán, dịch vụ bản đồ, và dịch vụ gửi SMS xác nhận — đều là service bên thứ ba.
-
-**Vai trò của flow:** Vì phần lớn độ trễ và lỗi thực tế nằm ở các lời gọi ra ngoài, pipeline tracing phải làm rõ được service bên thứ ba nào đang là điểm nghẽn hoặc gây lỗi cho trải nghiệm người dùng.
-
-**Yêu cầu cụ thể:**
-- Mỗi lời gọi ra third-party API phải được bọc trong một span riêng ghi rõ tên provider, endpoint, response code, và latency — để có thể tổng hợp thống kê theo từng provider (ví dụ "provider bản đồ X chậm hơn Y 3 lần vào giờ cao điểm").
-- Xử lý retry: khi một lời gọi third-party được retry (do timeout), mỗi lần retry phải là một span riêng nhưng liên kết vào cùng một "logical operation" span cha, để không hiểu nhầm 3 lần retry là 3 hành động độc lập.
-- Trace phải phân biệt được lỗi do timeout phía client (app đợi không đủ lâu) với lỗi do provider trả về chậm/hỏng, để đội ngũ biết nên điều chỉnh timeout hay đổi provider.
-- Đảm bảo dữ liệu trace không lưu lại thông tin thẻ thanh toán hoặc số điện thoại đầy đủ (phải mask/hash) dù các trường này xuất hiện trong request/response tới third-party.
-- Thiết kế dashboard (hoặc mô tả yêu cầu cho dashboard) tổng hợp theo trace để trả lời nhanh câu hỏi "trong 1000 request đặt xe gần nhất, bao nhiêu % thời gian tiêu tốn ở bên thứ ba so với logic nội bộ".
 
 ---
 

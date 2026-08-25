@@ -39,40 +39,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần đồng thuận
 
 ---
 
-## Cụm game server đồng bộ trạng thái trận đấu thời gian thực
-
-**Repository:** `consensus-game-server-match-state`
-
-**Hệ thống:** Nền tảng game nhiều người chơi, mỗi trận được xử lý bởi một nhóm server để chịu lỗi (server chết giữa trận không làm mất trận).
-
-**Vai trò của flow:** Dùng consensus để các server trong nhóm đồng thuận về thứ tự action của người chơi (input) và trạng thái trận đấu, đảm bảo mọi server có replica trạng thái giống nhau.
-
-**Yêu cầu cụ thể:**
-- Input của người chơi được coi là "log entry"; chỉ áp dụng vào state machine của trận sau khi được commit qua majority.
-- Độ trễ commit phải nằm trong ngân sách real-time (ví dụ dưới 100ms ở điều kiện mạng LAN nội bộ) — nêu rõ trade-off giữa an toàn (chờ quorum) và độ trễ.
-- Khi leader (server chủ trì trận) chết giữa trận, phải bầu leader mới từ replica còn log đầy đủ nhất, và trận tiếp tục mà người chơi không bị kick.
-- Có cơ chế phát hiện follower rớt mạng tạm thời và bắt kịp (catch-up) log khi kết nối lại, không cần restart toàn trận.
-- Log/snapshot phải được dọn sau khi trận kết thúc, không giữ vô hạn.
-
----
-
-## Cụm broker message queue tự xây (Kafka-like) với leader theo partition
-
-**Repository:** `consensus-message-queue-kafka-like`
-
-**Hệ thống:** Message broker tự phát triển, dữ liệu chia theo partition, mỗi partition có nhiều replica để chịu lỗi.
-
-**Vai trò của flow:** Consensus (kiểu Raft/ISR list) chọn leader cho từng partition, đảm bảo message được replicate tới đủ replica trước khi acknowledge producer.
-
-**Yêu cầu cụ thể:**
-- Producer có option chọn "acks" level: chỉ leader nhận (nhanh, rủi ro mất data khi leader chết trước khi replicate) hoặc chờ quorum ISR (an toàn hơn, chậm hơn) — implement cả hai và đo latency khác biệt.
-- Khi leader của partition chết, phải bầu leader mới trong ISR (in-sync replica set), và replica không nằm trong ISR (tụt quá xa) không được lên leader để tránh mất data đã ack.
-- Consumer đọc phải luôn đọc từ leader hiện tại (hoặc từ replica được đánh dấu đồng bộ đủ), không đọc dữ liệu chưa committed.
-- Có cơ chế "unclean leader election" là tùy chọn tắt/mở rõ ràng — nêu rõ hệ quả mất data nếu bật.
-- Log lại mọi lần chuyển leader (partition, leader cũ, leader mới, epoch/term) để phục vụ điều tra sự cố.
-
----
-
 ## Sổ cái giao dịch tài chính nội bộ (ledger) yêu cầu linearizability nghiêm ngặt
 
 **Repository:** `consensus-financial-ledger-linearizability`

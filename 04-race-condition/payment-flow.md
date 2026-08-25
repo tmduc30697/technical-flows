@@ -21,40 +21,6 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống có xử lý t
 
 ---
 
-## Gia hạn subscription tự động (recurring billing) cho SaaS
-
-**Repository:** `payment-saas-recurring-billing`
-
-**Hệ thống:** Một SaaS B2B tính phí theo tháng, tự động charge thẻ đã lưu của khách vào đúng ngày gia hạn mỗi tháng.
-
-**Vai trò của flow:** Flow billing job phải xử lý charge tự động cho hàng nghìn khách hàng cùng lúc vào đầu tháng, xử lý đúng khi charge thất bại (thẻ hết hạn, không đủ tiền) và callback báo kết quả có thể đến trễ hoặc trùng.
-
-**Yêu cầu cụ thể:**
-- Job billing chạy theo batch hàng nghìn subscription, mỗi subscription phải có idempotency key riêng cho lần charge của tháng đó (ví dụ theo `subscription_id + billing_period`), để nếu job bị chạy lại (do lỗi/crash giữa batch) không charge khách 2 lần cho cùng 1 tháng.
-- Mô tả cụ thể race: khách hàng tự nâng cấp gói (upgrade plan, thay đổi giá subscription) đúng lúc job billing tự động đang xử lý charge tháng đó theo giá cũ — quy định rõ transaction charge phải lock đúng bản ghi subscription và đọc giá tại thời điểm charge thực sự diễn ra (không dùng giá đã cache từ đầu job), tránh charge sai giá do đổi gói giữa lúc xử lý.
-- Khi callback từ cổng thanh toán báo "charge thất bại do thẻ hết hạn" đến trễ (vài giờ sau khi job đã đánh dấu tạm "đang xử lý"), hệ thống phải chuyển đúng trạng thái subscription sang "cần cập nhật phương thức thanh toán" và gửi thông báo khách, không để subscription treo ở trạng thái mơ hồ.
-- Nếu 2 callback báo kết quả khác nhau cho cùng 1 lần charge (ví dụ do cổng thanh toán gửi trùng nhưng nội dung bị cập nhật giữa 2 lần gửi — hiếm nhưng phải xử lý), quy định nguồn dữ liệu nào được coi là chính xác cuối cùng (ví dụ luôn ưu tiên trạng thái mới nhất theo timestamp từ cổng thanh toán, không phải theo thời điểm nhận).
-- Có cơ chế retry charge thất bại theo lịch cụ thể (ví dụ thử lại sau 3 ngày, 7 ngày trước khi hủy subscription), và mỗi lần retry phải dùng idempotency key khác (theo attempt number) để phân biệt với lần charge gốc, tránh cổng thanh toán coi là request trùng và không xử lý.
-
----
-
-## Ví điện tử nạp tiền qua nhiều phương thức (ngân hàng, thẻ, ví liên kết) cùng lúc
-
-**Repository:** `payment-ewallet-multi-method-topup`
-
-**Hệ thống:** Một ví điện tử cho phép người dùng nạp tiền từ nhiều nguồn (chuyển khoản ngân hàng, thẻ tín dụng, liên kết ví khác), mỗi nguồn có callback riêng với format và độ trễ khác nhau.
-
-**Vai trò của flow:** Flow xử lý callback nạp tiền phải cộng đúng số dư ví bất kể nguồn nào, tránh cộng trùng khi callback bị gửi lại, và xử lý đúng khi 2 giao dịch nạp tiền từ 2 nguồn khác nhau của cùng 1 user đến gần như đồng thời.
-
-**Yêu cầu cụ thể:**
-- Mỗi giao dịch nạp tiền phải có mã tham chiếu duy nhất xuyên suốt từ lúc tạo lệnh nạp tới lúc nhận callback, và transaction cộng số dư phải check đã xử lý mã này chưa trước khi cộng (idempotency ở tầng ghi số dư, không chỉ ở tầng nhận webhook).
-- Mô tả cụ thể: user nạp 100k qua ngân hàng và 200k qua thẻ gần như đồng thời, 2 callback đến gần nhau — cả 2 transaction cộng số dư đều phải `UPDATE balance = balance + amount` (cộng dồn atomic ở DB), không đọc số dư hiện tại rồi tính tổng ở application rồi ghi đè (dễ làm mất 1 trong 2 giao dịch nếu đọc-sửa-ghi không lock đúng dòng).
-- Khi callback báo nạp tiền thành công nhưng đến sau khi user đã báo lỗi qua support "không thấy tiền vào ví" và support đã thao tác cộng tiền tay để xử lý tạm, hệ thống phải phát hiện được khả năng cộng trùng (1 lần tay + 1 lần tự động cho cùng mã tham chiếu) và có cảnh báo đối soát, không để mất dấu.
-- Nếu 1 giao dịch nạp tiền bị callback báo "thất bại" sau khi trước đó đã có 1 callback báo "đang xử lý" (2 trạng thái khác nhau theo thời gian), quy định rõ trạng thái cuối cùng phải theo callback mới nhất theo timestamp thực từ nguồn thanh toán, và nếu số dư đã bị cộng tạm theo trạng thái "đang xử lý" (không nên xảy ra nhưng phải phòng vệ), phải có cơ chế trừ lại đúng số tiền khi biết chắc là thất bại.
-- Có báo cáo đối soát cuối ngày theo từng phương thức nạp tiền (ngân hàng/thẻ/ví liên kết), so khớp tổng số tiền và số lượng giao dịch giữa hệ thống nội bộ và báo cáo của từng đối tác, cảnh báo rõ theo từng phương thức nếu lệch.
-
----
-
 ## Cổng thanh toán tổng hợp (payment orchestration) định tuyến qua nhiều nhà cung cấp
 
 **Repository:** `payment-orchestration-multi-provider-routing`

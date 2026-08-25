@@ -21,40 +21,6 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần đánh đổi g
 
 ---
 
-## Kho lưu follow/follower cho mạng xã hội
-
-**Repository:** `cap-theorem-social-follow-graph`
-
-**Hệ thống:** Mạng xã hội lưu quan hệ follow/follower trên store phân tán, chịu tải đọc rất cao (ai follow ai) và ghi tương đối (follow/unfollow).
-
-**Vai trò của flow:** Tối ưu cho đọc nhanh và khả dụng cao (thiên về AP), chấp nhận có thể thấy trạng thái follow "cũ" trong thời gian ngắn thay vì chặn user khi mạng chập chờn.
-
-**Yêu cầu cụ thể:**
-- Ghi follow/unfollow phải thành công ngay cả khi một phần replica không phản hồi kịp (write vào node local trước, replicate nền), không được để user chờ hoặc lỗi vì 1 node chậm.
-- Đọc số lượng follower có thể là "gần đúng" (eventually consistent) và hệ thống phải công khai (qua doc/API) mức độ trễ tối đa cho phép (ví dụ vài giây).
-- Với hành động nhạy cảm hơn (ví dụ chặn/block user), phải chuyển sang mức consistency cao hơn (đọc/ghi quorum chặt) để tránh trường hợp user vẫn thấy nội dung của người đã block do dữ liệu chưa đồng bộ.
-- Xử lý conflict khi follow rồi unfollow rất nhanh liên tiếp trong lúc một phần hệ thống bị partition — trạng thái cuối cùng phải phản ánh đúng hành động gần nhất của user theo thời gian thực (not lost update).
-- Có công cụ đo được "staleness" thực tế (khoảng trễ giữa hành động và khi mọi replica đồng bộ) trong vận hành thật.
-
----
-
-## Kho dữ liệu cảm biến IoT chấp nhận mất một phần dữ liệu để giữ khả dụng
-
-**Repository:** `cap-theorem-iot-sensor-availability`
-
-**Hệ thống:** Nền tảng IoT thu thập dữ liệu cảm biến (nhiệt độ, độ ẩm) từ hàng chục nghìn thiết bị, lưu vào store phân tán nhiều vùng.
-
-**Vai trò của flow:** Ưu tiên availability để luôn nhận được dữ liệu ghi vào từ thiết bị (không được từ chối ghi dù một phần cluster mất kết nối), đánh đổi có thể tạm thời không nhất quán giữa các bản đọc.
-
-**Yêu cầu cụ thể:**
-- Thiết bị gửi dữ liệu phải luôn ghi được vào node gần nhất available, không phụ thuộc vào việc các node khác có đang phân vùng mạng hay không.
-- Đọc dữ liệu cho dashboard giám sát real-time chấp nhận đọc từ 1 replica (R=1) để tối ưu latency, nhưng phải hiển thị rõ "dữ liệu tính đến thời điểm X" để người xem biết độ trễ.
-- Đối với truy vấn phân tích lịch sử (không real-time), phải chuyển sang đọc với quorum cao hơn để đảm bảo không thiếu dữ liệu do đọc từ replica chưa kịp đồng bộ.
-- Xử lý trường hợp một vùng bị mất kết nối dài (nhiều giờ): dữ liệu thu thập trong lúc đó vẫn phải toàn vẹn ở vùng local và tự động merge/replicate khi kết nối khôi phục, không bị đè mất bởi dữ liệu ở vùng khác.
-- Đo lường và báo cáo được tỉ lệ dữ liệu bị trễ đồng bộ trên 1 phút, trên 1 giờ, để đánh giá SLA thực tế của hệ thống.
-
----
-
 ## Session store cần nhất quán cao hơn cho hành động nhạy cảm (thanh toán)
 
 **Repository:** `cap-theorem-payment-session-consistency`

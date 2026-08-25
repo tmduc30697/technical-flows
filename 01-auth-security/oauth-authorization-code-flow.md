@@ -21,57 +21,6 @@ Các đề bài dưới đây đi từ vai trò **OAuth Client** (tiêu thụ đ
 
 ---
 
-## App tích hợp với cửa hàng Shopify của người dùng
-
-**Repository:** `oauth-shopify-app-integration`
-
-**Hệ thống:** Một SaaS phân tích doanh thu cho chủ shop online, cần đọc dữ liệu order/inventory từ shop Shopify của họ.
-
-**Vai trò của flow:** App là OAuth Client xin quyền truy cập API Shopify theo scope hạn chế (chỉ đọc order, không được ghi), chạy song song cho nhiều tenant (mỗi user = một shop riêng).
-
-**Yêu cầu cụ thể:**
-- Mỗi user có thể kết nối/disconnect nhiều store Shopify khác nhau vào cùng một account.
-- Access token + refresh token của mỗi store phải được mã hóa khi lưu DB, không log ra plaintext.
-- Khi refresh token bị revoke từ phía Shopify (user rút quyền), hệ thống phải phát hiện ở lần gọi API kế tiếp và đánh dấu store là "cần kết nối lại" — không được crash job nền.
-- Có trang "Connected accounts" cho user xem scope đã cấp và thời điểm cấp quyền.
-- Test được case race condition: hai request đồng thời cùng dùng refresh token cũ để lấy access token mới (refresh token rotation).
-
----
-
-## Nền tảng lịch hẹn đồng bộ hai chiều với Google Calendar
-
-**Repository:** `oauth-google-calendar-two-way-sync`
-
-**Hệ thống:** App đặt lịch hẹn (booking) cho freelancer, cần đồng bộ 2 chiều: đọc lịch bận của freelancer từ Google Calendar và ghi event mới khi có booking.
-
-**Vai trò của flow:** OAuth Client xin `offline_access` để có refresh token dài hạn, phục vụ background job đồng bộ định kỳ mà không cần user online.
-
-**Yêu cầu cụ thể:**
-- Khi cấp quyền lần đầu, phải xin đúng scope `calendar.events` + `calendar.readonly`, hiển thị rõ cho user biết app sẽ đọc/ghi gì.
-- Refresh token phải được dùng để tự động lấy access token mới cho job chạy mỗi 15 phút, không được yêu cầu user đăng nhập lại.
-- Nếu access token hết hạn giữa lúc job đang chạy, job phải tự refresh và retry đúng 1 lần, không loop vô hạn.
-- Có cơ chế phát hiện và tự tắt đồng bộ nếu refresh token bị Google reject liên tục (ví dụ user đổi password Google).
-- Ghi log audit: mỗi lần app tạo/sửa event trên calendar của user phải lưu lại được ai/khi nào để phục vụ debug khi user thắc mắc.
-
----
-
-## Trình quản lý mạng xã hội đa nền tảng (social scheduler)
-
-**Repository:** `oauth-social-media-scheduler`
-
-**Hệ thống:** App cho phép người dùng soạn 1 bài viết và đăng đồng thời lên nhiều nền tảng (Facebook Page, Twitter/X, LinkedIn).
-
-**Vai trò của flow:** App phải chạy authorization code flow riêng biệt với 3 provider khác nhau, mỗi provider có cách cấp scope/token khác nhau, và quản lý được nhiều "connected identity" cho cùng một tính năng "post bài".
-
-**Yêu cầu cụ thể:**
-- Kiến trúc phải trừu tượng hóa được sự khác biệt giữa 3 OAuth provider (authorization endpoint, token endpoint, cách refresh token khác nhau) sau một interface chung.
-- Cho phép một user kết nối nhiều Facebook Page cùng lúc (không chỉ 1 Page/user).
-- Khi đăng bài thất bại vì token của 1 platform bị hết hạn/revoke, các platform khác vẫn phải đăng thành công — trả về báo cáo per-platform (partial success).
-- Có UI hiển thị trạng thái kết nối (đang hoạt động/hết hạn/lỗi) theo từng platform, theo từng page/account.
-- Xử lý callback URL bị nền tảng thứ 3 gọi lại không đúng thứ tự (user mở nhiều tab kết nối cùng lúc).
-
----
-
 ## Tự xây dựng OAuth Provider cho hệ sinh thái "app thứ ba"
 
 **Repository:** `oauth-provider-third-party-ecosystem`

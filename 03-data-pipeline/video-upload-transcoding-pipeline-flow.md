@@ -22,23 +22,6 @@ Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau —
 
 ---
 
-## Nền tảng e-learning với video bài giảng
-
-**Repository:** `video-transcoding-elearning-lecture`
-
-**Hệ thống:** Một SaaS cho giảng viên upload video bài giảng, học viên xem theo khóa học, có yêu cầu phụ đề.
-
-**Vai trò của flow:** Xử lý video bài giảng thành định dạng streaming tối ưu, kèm sinh phụ đề tự động và gắn watermark chống lộ nội dung khóa học.
-
-**Yêu cầu cụ thể:**
-- Pipeline phải chèn bước tạo phụ đề tự động (speech-to-text) chạy song song với transcode hình ảnh, rồi merge kết quả trước khi publish.
-- Video chỉ được publish cho học viên xem khi giảng viên đã duyệt (preview) bản đã transcode — cho phép giảng viên yêu cầu transcode lại nếu chất lượng không đạt.
-- Gắn watermark động (email/tên học viên) vào từng bản stream để chống chia sẻ lại — không được làm tăng đáng kể thời gian xử lý tổng thể.
-- Giới hạn tổng số phút video xử lý mỗi tháng theo gói cước của giảng viên; job phải bị chặn/queue lại rõ ràng nếu vượt quota, không âm thầm fail.
-- Xử lý được trường hợp giảng viên upload nhiều video cùng lúc cho một khóa học — đảm bảo thứ tự publish đúng theo thứ tự bài học dù xử lý xong không đồng thời.
-
----
-
 ## App video ngắn dạng TikTok
 
 **Repository:** `video-transcoding-short-video-tiktok-like`
@@ -53,40 +36,6 @@ Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau —
 - Video phải đi qua bước kiểm tra sơ bộ (duration, kích thước, định dạng hợp lệ) trước khi vào hàng đợi transcode, từ chối sớm các file không hợp lệ để tránh tốn tài nguyên worker.
 - Khi lượng upload tăng đột biến (viral moment, giờ cao điểm), hệ thống phải tự scale worker transcode theo hàng đợi, có cơ chế backpressure để không làm sập toàn bộ hệ thống.
 - Video bị người dùng xóa trong lúc đang transcode phải hủy job giữa chừng và dọn sạch file trung gian, không tiếp tục xử lý lãng phí.
-
----
-
-## Marketplace bán hàng có video demo sản phẩm
-
-**Repository:** `video-transcoding-marketplace-product-demo`
-
-**Hệ thống:** Một nền tảng e-commerce cho phép seller upload video demo/unbox sản phẩm gắn vào trang listing.
-
-**Vai trò của flow:** Xử lý video seller upload thành định dạng chuẩn để hiển thị trên trang sản phẩm, tích hợp với bước kiểm duyệt nội dung trước khi public.
-
-**Yêu cầu cụ thể:**
-- Video sau khi transcode xong phải được giữ ở trạng thái "chờ duyệt" và chỉ gắn vào listing công khai sau khi qua bước kiểm duyệt nội dung (không quảng cáo sai, không nội dung cấm).
-- Hỗ trợ seller upload hàng loạt (bulk) nhiều video cho nhiều sản phẩm cùng lúc; hệ thống phải theo dõi và báo cáo trạng thái xử lý riêng cho từng video, không gộp chung một trạng thái.
-- Giới hạn độ dài và kích thước file theo policy (ví dụ tối đa 2 phút, 200MB) — từ chối ngay ở bước upload, không đưa vào hàng đợi transcode rồi mới từ chối.
-- Khi seller thay video mới cho listing đã có video cũ, phải đảm bảo không có khoảng thời gian listing hiển thị video lỗi/trống trong lúc video mới đang xử lý (giữ video cũ hiển thị đến khi video mới sẵn sàng).
-- Theo dõi chi phí transcode theo từng seller/gói để tính vào chi phí vận hành, cảnh báo nếu một seller tiêu tốn tài nguyên bất thường (có thể là spam/abuse).
-
----
-
-## SaaS B2B lưu trữ video hội thảo/webinar cho doanh nghiệp
-
-**Repository:** `video-transcoding-b2b-saas-webinar-storage`
-
-**Hệ thống:** Một SaaS cho nhiều công ty khách hàng (multi-tenant) upload và lưu trữ video hội thảo nội bộ, phân quyền xem theo tổ chức.
-
-**Vai trò của flow:** Transcode video hội thảo thành các rendition phù hợp với băng thông văn phòng, đảm bảo cách ly hoàn toàn dữ liệu giữa các tenant.
-
-**Yêu cầu cụ thể:**
-- Toàn bộ file gốc, file trung gian và output transcode phải được cách ly theo tenant (storage path/namespace riêng), không rò rỉ chéo giữa các công ty dù dùng chung hạ tầng xử lý.
-- Mỗi tenant có hạn mức storage và số phút xử lý theo hợp đồng; hệ thống phải tính toán và cảnh báo trước khi tenant vượt hạn mức, có cơ chế từ chối job mới một cách rõ ràng khi vượt.
-- Cho phép admin của từng tenant cấu hình độ phân giải tối đa cần transcode (một số công ty không cần 4K) để tối ưu chi phí — pipeline phải đọc config này trước khi khởi tạo job.
-- Video nội bộ nhạy cảm phải hỗ trợ mã hóa tại rest và cấp link xem có thời hạn (signed URL hết hạn sau X giờ), không cho phép link bị chia sẻ vô thời hạn.
-- Cung cấp báo cáo chi phí xử lý (phút video đã transcode, dung lượng lưu trữ) theo từng tenant để phục vụ billing nội bộ hoặc chargeback.
 
 ---
 

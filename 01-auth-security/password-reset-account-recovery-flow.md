@@ -21,40 +21,6 @@ Các đề bài dưới đây đi từ luồng quên mật khẩu tiêu chuẩn 
 
 ---
 
-## App di động (đặt xe/giao hàng) với tài khoản định danh bằng số điện thoại
-
-**Repository:** `account-recovery-mobile-phone-identity`
-
-**Hệ thống:** Một app đặt xe/giao hàng mà tài khoản người dùng được định danh chính bằng số điện thoại, không bắt buộc email.
-
-**Vai trò của flow:** Khôi phục truy cập tài khoản khi người dùng đổi điện thoại hoặc quên mật khẩu, dựa trên xác thực OTP qua SMS tới số điện thoại đã đăng ký.
-
-**Yêu cầu cụ thể:**
-- OTP gửi qua SMS phải giới hạn số lần gửi trong một khoảng thời gian (ví dụ tối đa 5 lần/giờ) và giới hạn số lần nhập sai trước khi tạm khóa yêu cầu OTP cho số đó.
-- Phải xử lý được trường hợp số điện thoại đã đăng ký bị chuyển sang chủ sở hữu mới (SIM recycling) — không cho phép người dùng mới của số điện thoại đó tự động chiếm được tài khoản cũ chỉ bằng OTP.
-- Nếu người dùng đổi thiết bị mới nhưng vẫn giữ số điện thoại, luồng khôi phục phải phân biệt được "đổi thiết bị hợp lệ" và "kẻ tấn công có SIM nhưng không phải chủ tài khoản" bằng ít nhất một tín hiệu xác minh bổ sung.
-- Toàn bộ session cũ trên thiết bị trước phải bị vô hiệu khi có yêu cầu khôi phục thành công trên thiết bị mới, và gửi cảnh báo qua kênh khác (email phụ nếu có, hoặc thông báo push tới thiết bị cũ nếu vẫn còn mạng) trước khi hoàn tất chuyển giao.
-- Có cơ chế phát hiện pattern bất thường (nhiều tài khoản khác nhau cùng yêu cầu OTP dồn dập tới các số điện thoại liên tiếp nhau) để chặn tấn công tự động hàng loạt.
-
----
-
-## B2B SaaS với tài khoản hỗn hợp: một phần SSO, một phần password
-
-**Repository:** `account-recovery-b2b-saas-hybrid-sso`
-
-**Hệ thống:** Một SaaS quản lý nhân sự cho doanh nghiệp, một số công ty khách hàng bắt buộc nhân viên đăng nhập qua SSO của công ty, một số công ty khác vẫn dùng email/password truyền thống.
-
-**Vai trò của flow:** Luồng quên mật khẩu/khôi phục phải phân biệt đúng loại tài khoản và điều hướng phù hợp, tránh gây nhầm lẫn hoặc tạo lỗ hổng bỏ qua SSO.
-
-**Yêu cầu cụ thể:**
-- Khi user thuộc công ty bắt buộc SSO nhập email vào form "quên mật khẩu", hệ thống phải từ chối tạo token reset và hướng dẫn họ liên hệ SSO/admin công ty — không được vô tình cho phép tạo mật khẩu cục bộ (điều này sẽ phá vỡ chính sách bắt buộc SSO).
-- Với công ty dùng password truyền thống, luồng reset chuẩn (token một lần, hết hạn ngắn) áp dụng như bình thường.
-- Admin công ty phải có quyền tự "force reset" mật khẩu của một nhân viên cụ thể trong tenant của họ (ví dụ khi nhân viên nghỉ việc gấp), tách biệt khỏi self-service reset của user.
-- Ghi log riêng cho mọi hành động liên quan tới reset/force-reset mật khẩu (ai thực hiện, cho ai, khi nào) để phục vụ audit nội bộ của từng công ty khách hàng.
-- Nếu một công ty chuyển đổi chính sách (từ password sang bắt buộc SSO), các token reset password đang tồn tại (nếu có) của nhân viên công ty đó phải bị vô hiệu ngay khi chính sách mới có hiệu lực.
-
----
-
 ## Fintech: khôi phục tài khoản khi mất cả email và số điện thoại đăng ký
 
 **Repository:** `account-recovery-fintech-lost-channels`
@@ -86,20 +52,3 @@ Các đề bài dưới đây đi từ luồng quên mật khẩu tiêu chuẩn 
 - Mọi thao tác reset của helpdesk phải yêu cầu chính helpdesk agent đó xác thực MFA trước khi thực hiện, và ghi log agent nào đã reset cho tài khoản nào.
 - Tài khoản có quyền cao (ví dụ admin hệ thống tài liệu) phải yêu cầu hai người xác nhận (four-eyes principle) trước khi được reset, không cho một agent helpdesk đơn lẻ tự thực hiện.
 - Có cơ chế phát hiện bất thường nếu một agent helpdesk thực hiện reset cho số lượng tài khoản lớn bất thường trong thời gian ngắn (dấu hiệu agent bị mạo danh hoặc lạm quyền).
-
----
-
-## Cổng bệnh nhân y tế với xác minh danh tính nhiều yếu tố khi khôi phục
-
-**Repository:** `account-recovery-patient-portal-identity-verification`
-
-**Hệ thống:** Một cổng thông tin cho bệnh nhân xem kết quả xét nghiệm, lịch hẹn, và trao đổi với bác sĩ.
-
-**Vai trò của flow:** Khôi phục tài khoản khi bệnh nhân quên mật khẩu phải xác minh danh tính chặt hơn thông thường do dữ liệu là thông tin y tế nhạy cảm, cân bằng giữa an toàn và việc bệnh nhân (thường không rành công nghệ) vẫn dùng được.
-
-**Yêu cầu cụ thể:**
-- Luồng khôi phục phải kết hợp ít nhất hai yếu tố xác minh độc lập trong số: email/SMS đã đăng ký, ngày sinh, và một thông tin chỉ hệ thống y tế biết (ví dụ mã số bệnh nhân) — không chỉ dựa vào một email link đơn thuần như ứng dụng thông thường.
-- Nếu bệnh nhân nhập sai thông tin xác minh quá số lần cho phép, phải chuyển hướng sang liên hệ trực tiếp với cơ sở y tế thay vì tiếp tục cho thử vô hạn.
-- Sau khi khôi phục thành công, phải gửi thông báo tới địa chỉ liên hệ khác đã lưu trước đó (nếu có) như một lớp cảnh báo bổ sung, đề phòng khôi phục bị người khác thực hiện.
-- Toàn bộ dữ liệu dùng để xác minh danh tính trong quy trình khôi phục phải được xử lý tuân thủ quy định bảo mật dữ liệu y tế (không log thông tin xác minh dưới dạng plaintext lâu dài).
-- Cho phép người giám hộ hợp pháp (ví dụ cha mẹ của bệnh nhân trẻ em) thực hiện khôi phục thay, với một quy trình xác minh vai trò giám hộ riêng biệt, có audit trail rõ ràng phân biệt "bệnh nhân tự khôi phục" và "giám hộ khôi phục thay".
