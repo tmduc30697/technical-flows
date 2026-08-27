@@ -1,0 +1,12 @@
+# Chuyển hàng liên kho hai chiều với nhiều SKU trong một lần chuyển
+
+**Hệ thống:** Một hệ thống quản lý kho vận cho chuỗi cửa hàng/nhà phân phối, nhân viên tạo phiếu chuyển hàng giữa 2 kho (trừ tồn kho nguồn, cộng tồn kho đích), mỗi phiếu chuyển có thể gồm nhiều SKU khác nhau trong cùng 1 lần.
+
+**Vai trò của flow:** Transaction xử lý phiếu chuyển hàng giống bài toán chuyển tiền giữa 2 tài khoản kinh điển, nhưng phức tạp hơn vì 1 giao dịch có thể động vào nhiều dòng tồn kho (nhiều cặp kho-SKU) cùng lúc, cần chọn đúng thứ tự lock để không deadlock khi có phiếu chuyển ngược chiều nhau chạy song song.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: phiếu P1 chuyển từ kho A sang kho B gồm SKU 101 rồi SKU 102 (theo thứ tự nhập trên phiếu); phiếu P2 chuyển từ kho B sang kho A gồm SKU 102 rồi SKU 101, cả 2 chạy song song — nếu mỗi transaction lock theo thứ tự "kho nguồn trước, rồi từng SKU theo thứ tự nhập trên phiếu", P1 sẽ lock (A,101) rồi chờ lock (B,102) trong khi P2 đã lock (B,102) rồi chờ lock (A,101), tạo deadlock; yêu cầu chuẩn hóa thứ tự lock toàn cục theo composite key (warehouse_id, sku_id) tăng dần, bất kể chiều chuyển hay thứ tự nhập trên phiếu.
+- Với phiếu có nhiều SKU (ví dụ 20 SKU trong 1 lần chuyển), yêu cầu transaction phải lock toàn bộ các dòng tồn kho liên quan (cả nguồn lẫn đích) theo đúng thứ tự đã chuẩn hóa ngay từ đầu trước khi bắt đầu trừ/cộng bất kỳ dòng nào, không được lock rải rác từng SKU một trong lúc xử lý tuần tự (dễ tạo deadlock giữa các phiếu chỉ chồng lấn một phần SKU với nhau).
+- Khi transaction bị rollback do deadlock, yêu cầu retry tự động nhưng phải đọc lại tồn kho hiện tại tại thời điểm retry (không dùng số liệu đã đọc ở lần thử trước), vì trong khoảng thời gian chờ retry có thể đã có phiếu chuyển khác của các kho liên quan làm thay đổi tồn kho.
+- Chọn isolation level `READ COMMITTED` cho transaction chuyển kho, giải thích cụ thể vì sao `REPEATABLE READ` mặc định của một số DB có thể mở rộng phạm vi lock (gap lock/range lock) và ảnh hưởng tới các phiếu chuyển kho khác không hề liên quan tới cùng SKU, làm tăng khả năng deadlock giả tạo không cần thiết.
+- Viết test dựng nhiều phiếu chuyển ngẫu nhiên giữa các cặp kho khác nhau với danh sách SKU chồng lấn một phần, chạy song song hàng loạt, assert tổng tồn kho từng SKU trên toàn hệ thống bất biến trước/sau và không có phiếu nào bị treo vượt quá timeout quy định dù đã tính cả thời gian retry.

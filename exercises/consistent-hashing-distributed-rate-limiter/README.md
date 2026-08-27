@@ -1,0 +1,12 @@
+# Distributed rate limiter sharding theo user/API key
+
+**Hệ thống:** Bộ đếm rate limit (giới hạn số request cho phép trong một khoảng thời gian) theo từng user/API key, được sharding ra nhiều node để chịu tải lớn từ hàng triệu client gọi API cùng lúc.
+
+**Vai trò của flow:** Consistent hashing đảm bảo mọi request của cùng một user/API key luôn được route tới đúng một node cố định để tính rate limit đúng (không bị đếm rải rác trên nhiều node dẫn tới giới hạn bị vô hiệu hóa), và khi cụm rate limiter scale/rebalance, việc ánh xạ key sang node phải ổn định để không làm counter bị reset hoặc nhân đôi limit ngoài ý muốn.
+
+**Yêu cầu cụ thể:**
+- Toàn bộ request của một user/API key phải luôn được route hash tới đúng một node chịu trách nhiệm đếm cho key đó — nếu router định tuyến sai (do bảng hash không đồng bộ giữa các instance router), rate limit thực tế của user đó có thể bị tính rải trên nhiều node khác nhau, khiến tổng số request cho phép vượt xa giới hạn thật (mỗi node lại tưởng user mới bắt đầu đếm từ 0).
+- Khi cụm rate limiter thêm/bớt node (do scale theo tải), một số key sẽ bị ánh xạ sang node khác — counter hiện tại của các key đó (đang ở giữa cửa sổ tính giới hạn, ví dụ đang đếm 80/100 request trong phút hiện tại) phải được chuyển theo đúng giá trị sang node mới, không được để counter reset về 0 giữa chừng vì rebalance, vì như vậy vô tình cho phép user vượt giới hạn ngay sau khi cụm scale.
+- Race condition khi nhiều request của cùng một key tới gần như đồng thời ngay tại thời điểm key đó đang được di chuyển giữa 2 node (do rebalance) — cần cơ chế rõ ràng tránh việc cả node cũ và node mới cùng đếm độc lập cho cùng một khoảng thời gian, dẫn tới user bị tính rate limit sai (chặn nhầm dù chưa vượt ngưỡng, hoặc ngược lại vượt ngưỡng thật nhưng không bị chặn).
+- Với "hot key" (một API key/user có traffic cực lớn, ví dụ một service nội bộ gọi API liên tục với tần suất cao), việc dồn toàn bộ traffic tính rate limit cho key đó vào đúng một node theo consistent hashing thuần có thể biến node đó thành nghẽn cổ chai — cần nêu chiến lược xử lý (ví dụ chia nhỏ đếm cục bộ theo nhiều node rồi tổng hợp định kỳ/gần đúng cho riêng nhóm hot key, đánh đổi độ chính xác tức thời lấy khả năng chịu tải).
+- Đo lường: độ trễ thêm vào do bước xác định node phụ trách rate limit cho mỗi request (routing overhead), tỉ lệ request bị tính sai giới hạn (đo bằng đối soát log request thực tế so với giới hạn cấu hình) trong lúc cụm đang rebalance, và tần suất phát hiện hot key cần xử lý riêng.

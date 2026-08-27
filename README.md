@@ -4,45 +4,196 @@ Danh sách tập trung vào chiều sâu kỹ thuật/hạ tầng trong bối c�
 
 ## Xác thực/bảo mật chuẩn hóa, nhiều web app đều cần
 
-- [OAuth authorization code flow](01-auth-security/oauth-authorization-code-flow.md)
-- [Single Sign-On (SSO) flow](01-auth-security/sso-flow.md)
-- [Multi-factor authentication (MFA) flow](01-auth-security/mfa-flow.md)
-- [Password reset & Account recovery flow](01-auth-security/password-reset-account-recovery-flow.md)
-- [Device trust/session flow](01-auth-security/device-trust-session-flow.md)
+- **OAuth authorization code flow** — Các đề bài dưới đây đi từ vai trò **OAuth Client** (tiêu thụ đăng nhập/API bên thứ ba) đến vai trò **Authorization Server** (tự cấp quyền cho app thứ ba), nhằm luyện đủ các góc của authorization code flow trong bối cảnh web app.
+  - ["Đăng nhập bằng Google" cho một SaaS dashboard nội bộ](exercises/oauth-google-login-internal-dashboard/)
+  - [Tự xây dựng OAuth Provider cho hệ sinh thái "app thứ ba"](exercises/oauth-provider-third-party-ecosystem/)
+  - [Backend-for-Frontend (BFF) cho mobile app cần bảo mật cao](exercises/oauth-bff-mobile-secure/)
+- **Single Sign-On (SSO) flow** — Các đề bài dưới đây đi từ vai trò **Service Provider (SP)** tích hợp với Identity Provider (IdP) bên ngoài của khách hàng doanh nghiệp, đến vai trò **tự làm Identity Provider** cho một hệ sinh thái nhiều app con, qua các bối cảnh B2B SaaS, nội bộ doanh nghiệp, nền tảng công cộng đa app, y tế và fintech.
+  - [B2B SaaS đa khách hàng tích hợp Okta/Azure AD của từng công ty](exercises/sso-b2b-saas-okta-azure-ad/)
+  - [Cổng đăng nhập chung cho các app nội bộ doanh nghiệp](exercises/sso-enterprise-internal-portal/)
+  - [Fintech cho phép SSO giữa web, mobile app và đối tác nhúng (embedded finance)](exercises/sso-fintech-embedded-finance/)
+  - [Hệ sinh thái nhiều app tiêu dùng dùng chung một tài khoản đăng nhập kiểu Google](exercises/sso-consumer-platform-multi-app-ecosystem/)
+  - [SSO giữa hệ thống bệnh viện trung tâm và mạng lưới phòng khám liên kết](exercises/sso-healthcare-hospital-clinic-network/)
+- **Multi-factor authentication (MFA) flow** — Các đề bài dưới đây đi qua nhiều loại yếu tố xác thực thứ hai (TOTP, SMS, push notification, biometric, hardware key/WebAuthn) trong các bối cảnh fintech, B2B SaaS, doanh nghiệp nội bộ, mạng xã hội và y tế, luyện cả enrollment, xác thực, step-up và account recovery khi mất yếu tố thứ hai.
+  - [Ngân hàng số bắt buộc MFA cho đăng nhập và giao dịch nhạy cảm](exercises/mfa-digital-bank-mandatory/)
+  - [Công cụ nội bộ DevOps bắt buộc hardware security key cho tài khoản đặc quyền](exercises/mfa-devops-hardware-key-privileged/)
+  - [Nền tảng y tế từ xa với MFA thích ứng theo rủi ro (risk-based/adaptive)](exercises/mfa-telehealth-risk-based/)
+  - [SaaS B2B cho phép admin công ty tự cấu hình chính sách MFA bắt buộc theo tổ chức](exercises/mfa-b2b-saas-org-policy/)
+  - [Mạng xã hội bảo vệ tài khoản creator/influencer lớn khỏi chiếm quyền và tấn công MFA fatigue](exercises/mfa-social-creator-account-takeover-fatigue/)
+- **Password reset & Account recovery flow** — Các đề bài dưới đây đi từ luồng quên mật khẩu tiêu chuẩn qua email, đến các bối cảnh phức tạp hơn (xác thực bằng số điện thoại, tài khoản SSO-only, mất toàn bộ kênh liên hệ, yêu cầu compliance cao) trong marketplace, mobile app, B2B SaaS, fintech, doanh nghiệp nội bộ và y tế.
+  - [Marketplace thương mại điện tử với quên mật khẩu qua email](exercises/account-recovery-marketplace-email-reset/)
+  - [Fintech: khôi phục tài khoản khi mất cả email và số điện thoại đăng ký](exercises/account-recovery-fintech-lost-channels/)
+  - [Hệ thống nội bộ doanh nghiệp với "break-glass" recovery do helpdesk xử lý](exercises/account-recovery-enterprise-break-glass/)
+  - [App di động xử lý khôi phục tài khoản khi số điện thoại đăng ký bị SIM-swap](exercises/account-recovery-mobile-sim-swap/)
+  - [SaaS B2B khôi phục quyền truy cập khi công ty khách hàng đổi hoặc mất Identity Provider](exercises/account-recovery-b2b-saas-sso-idp-lost/)
+  - [Nền tảng y tế cân bằng giữa khôi phục tài khoản nhanh cho tình huống cấp cứu và xác minh danh tính chặt](exercises/account-recovery-healthcare-urgent-verification/)
+- **Device trust/session flow** — Các đề bài dưới đây đi từ việc ghi nhớ thiết bị đáng tin để giảm ma sát đăng nhập, đến việc bắt buộc thiết bị phải đạt chuẩn bảo mật (Zero Trust) mới được truy cập, qua các bối cảnh fintech, B2B SaaS doanh nghiệp, streaming, messaging và e-commerce, luyện quản lý session đa thiết bị, phát hiện bất thường và revoke quyền truy cập.
+  - [B2B SaaS Zero Trust chỉ cho phép truy cập từ thiết bị công ty quản lý](exercises/device-trust-zero-trust-b2b-saas/)
+  - [App messaging với phiên đăng nhập liên kết đa thiết bị (linked devices)](exercises/device-trust-messaging-linked-devices/)
+  - [Marketplace e-commerce phát hiện session bất thường và yêu cầu step-up](exercises/device-trust-marketplace-anomaly-stepup/)
+  - [Ngân hàng số quản lý device trust cho giao dịch chuyển tiền giá trị lớn](exercises/device-trust-fintech-highvalue-transfer/)
+  - [Nền tảng streaming giới hạn số thiết bị xem đồng thời trên một tài khoản](exercises/device-trust-streaming-device-slot-limit/)
 
 ## Kỹ thuật rõ ràng nhưng gói gọn trong phạm vi một service/module
 
-- [Load balancing algorithms flow (round-robin/least-connection/consistent hashing ở layer LB)](02-service-module/load-balancing-algorithms-flow.md)
-- [Service discovery & health check flow](02-service-module/service-discovery-health-check-flow.md)
-- [Graceful shutdown & connection draining flow](02-service-module/graceful-shutdown-connection-draining-flow.md)
-- [Distributed tracing/observability pipeline flow](02-service-module/distributed-tracing-observability-pipeline-flow.md)
-- [Blue-green/Canary deployment flow](02-service-module/blue-green-canary-deployment-flow.md)
-- [Multi-tenancy/tenant data isolation flow](02-service-module/multi-tenancy-tenant-data-isolation-flow.md)
+- **Load balancing algorithms flow (round-robin/least-connection/consistent hashing ở layer LB)** — Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (API gateway cho SaaS B2B, CDN video streaming, fintech, game server, e-commerce flash sale) để luyện việc chọn và triển khai đúng thuật toán load balancing cho từng loại traffic.
+  - [Load balancer cho hệ thống thanh toán fintech cần session affinity](exercises/load-balancing-fintech-session-affinity/)
+  - [Matchmaking server cho game nhiều người chơi thời gian thực](exercises/load-balancing-game-matchmaking-server/)
+  - [E-commerce chịu tải đột biến trong flash sale](exercises/load-balancing-ecommerce-flash-sale-spike/)
+  - [API gateway route theo tenant có trọng số cho nền tảng SaaS B2B](exercises/load-balancing-saas-b2b-tenant-weighted-routing/)
+  - [Load balancing tại edge server cho CDN video streaming](exercises/load-balancing-cdn-video-streaming-edge/)
+- **Service discovery & health check flow** — Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (nền tảng microservices SaaS, chuỗi bán lẻ đa chi nhánh, hạ tầng multi-region, service mesh nội bộ) để luyện việc đăng ký, phát hiện và theo dõi sức khỏe service một cách đúng đắn.
+  - [Service registry cho nền tảng SaaS microservices](exercises/service-discovery-saas-microservices-registry/)
+  - [Service discovery đa vùng (multi-region) cho hệ thống thanh toán](exercises/service-discovery-payment-multi-region/)
+  - [Service mesh nội bộ cho doanh nghiệp với sidecar health check](exercises/service-discovery-service-mesh-sidecar/)
+  - [Service discovery & health check cho hàng nghìn thiết bị POS tại chuỗi cửa hàng bán lẻ kết nối không liên tục](exercises/service-discovery-retail-pos-intermittent-connectivity/)
+- **Graceful shutdown & connection draining flow** — Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (e-commerce checkout, streaming video, chat real-time, background worker, API gateway) để luyện việc tắt service một cách an toàn mà không làm rơi request hoặc mất dữ liệu đang xử lý.
+  - [Checkout service của sàn e-commerce trong lúc deploy](exercises/graceful-shutdown-ecommerce-checkout-deploy/)
+  - [Chat server real-time cho ứng dụng nhắn tin](exercises/graceful-shutdown-chat-server-realtime/)
+  - [API Gateway thực hiện rolling restart toàn cụm backend](exercises/graceful-shutdown-api-gateway-rolling-restart/)
+  - [Server streaming video cần shutdown mà không cắt ngang luồng đang phát](exercises/graceful-shutdown-video-streaming-server/)
+  - [Background worker xử lý job dài đang consume message từ queue](exercises/graceful-shutdown-background-worker-queue/)
+- **Distributed tracing/observability pipeline flow** — Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (SaaS B2B nhiều microservice, e-commerce, fintech, mobile backend gọi third-party, pipeline xử lý media) để luyện việc theo dõi một request đi qua nhiều service và tổng hợp lại thành một câu chuyện có thể debug được.
+  - [Truy vết request xuyên nhiều service trong nền tảng SaaS B2B](exercises/distributed-tracing-b2b-saas-request/)
+  - [Observability cho pipeline xử lý giao dịch fintech cần audit chặt](exercises/distributed-tracing-fintech-audit-observability/)
+  - [Pipeline xử lý media (transcode video) nhiều bước bất đồng bộ](exercises/distributed-tracing-video-transcode-pipeline/)
+  - [Truy vết một đơn hàng e-commerce qua giỏ hàng, tồn kho, thanh toán và xác nhận](exercises/distributed-tracing-ecommerce-order-flow/)
+  - [Trace lời gọi từ mobile app xuyên qua backend tới các dịch vụ bên thứ ba](exercises/distributed-tracing-mobile-backend-thirdparty/)
+- **Blue-green/Canary deployment flow** — Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (SaaS B2B multi-tenant, e-commerce checkout, mobile backend API versioning, hệ thống core banking, hạ tầng phục vụ mô hình machine learning) để luyện việc triển khai phiên bản mới an toàn, có thể rollback nhanh, và giảm thiểu rủi ro ảnh hưởng người dùng thật.
+  - [Blue-green deployment cho service lõi của nền tảng SaaS multi-tenant](exercises/blue-green-deployment-saas-core-service/)
+  - [Triển khai thay đổi cho hệ thống core banking cần kiểm soát chặt và có thể audit](exercises/deployment-core-banking-audit-controlled/)
+  - [Canary deployment cho việc thay thế mô hình machine learning đang serving](exercises/canary-deployment-ml-model-replacement/)
+  - [Canary deployment cho luồng checkout của sàn e-commerce trong giờ cao điểm](exercises/canary-deployment-ecommerce-checkout-highstakes/)
+  - [Canary rollout cho backend mobile phải serving song song nhiều phiên bản app cũ](exercises/canary-deployment-mobile-backend-api-versioning/)
+- **Multi-tenancy/tenant data isolation flow** — Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (SaaS B2B dùng chung schema, nền tảng hồ sơ y tế cần compliance cao, marketplace nhiều người bán, SaaS nhân sự/payroll, công cụ nội bộ đa phòng ban) để luyện việc cách ly dữ liệu giữa các tenant đúng đắn và không để lộ dữ liệu chéo tenant do lỗi logic.
+  - [Cách ly dữ liệu theo tenant dùng chung schema/database cho SaaS quản lý dự án](exercises/multi-tenancy-project-management-shared-schema/)
+  - [Cách ly nghiêm ngặt cho nền tảng hồ sơ sức khỏe đa phòng khám](exercises/multi-tenancy-healthcare-strict-isolation/)
+  - [Cách ly dữ liệu nhân sự/lương giữa các công ty khách hàng trên SaaS payroll](exercises/multi-tenancy-payroll-saas-isolation/)
+  - [Cách ly dữ liệu bán hàng giữa các seller trên marketplace dùng chung nền tảng](exercises/multi-tenancy-marketplace-seller-isolation/)
+  - [Cách ly dữ liệu giữa các phòng ban dùng chung một công cụ nội bộ](exercises/multi-tenancy-internal-tool-department-isolation/)
 
 ## Xử lý dữ liệu lớn/pipeline, đặc trưng cho hệ thống web quy mô lớn
 
-- [Video upload & transcoding pipeline flow](03-data-pipeline/video-upload-transcoding-pipeline-flow.md)
-- [Live streaming ingestion flow](03-data-pipeline/live-streaming-ingestion-flow.md)
-- [Reconciliation flow giữa nhiều hệ thống thanh toán](03-data-pipeline/reconciliation-flow.md)
-- [Search indexing/autocomplete pipeline flow](03-data-pipeline/search-indexing-autocomplete-pipeline-flow.md)
+- **Video upload & transcoding pipeline flow** — Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau — nền tảng chia sẻ video, e-learning, short-video mobile, marketplace, SaaS B2B webinar, và hậu xử lý livestream — nhằm luyện đủ các góc của flow upload & transcode video (chunking, hàng đợi xử lý, đa độ phân giải, xử lý lỗi, chi phí vận hành).
+  - [Nền tảng chia sẻ video kiểu YouTube](exercises/video-transcoding-youtube-like-sharing/)
+  - [App video ngắn dạng TikTok](exercises/video-transcoding-short-video-tiktok-like/)
+  - [Hậu xử lý bản ghi sau khi kết thúc livestream](exercises/video-transcoding-livestream-vod-postprocessing/)
+  - [E-learning với phụ đề và chương mục đồng bộ](exercises/video-transcoding-elearning-subtitle-chapter-sync/)
+  - [Marketplace với video sản phẩm tự upload từ seller](exercises/video-transcoding-marketplace-seller-listing-video/)
+  - [SaaS B2B webinar với yêu cầu gửi bản ghi ngay sau buổi họp](exercises/video-transcoding-saas-b2b-webinar-fast-delivery/)
+- **Live streaming ingestion flow** — Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau — nền tảng streaming giải trí, livestream bán hàng, hội thảo trực tuyến, phát sóng thể thao, nền tảng gaming đa vùng, và lớp học trực tuyến — nhằm luyện đủ các góc của flow tiếp nhận luồng live (ingest, transcode real-time, phân phối CDN, độ trễ, khả năng chịu lỗi).
+  - [Nền tảng streaming giải trí kiểu Twitch](exercises/live-streaming-entertainment-twitch-like/)
+  - [Nền tảng phát sóng thể thao kết hợp cá cược trực tiếp](exercises/live-streaming-sports-betting/)
+  - [Nền tảng gaming với ingest đa vùng địa lý](exercises/live-streaming-gaming-multi-region-ingest/)
+  - [Livestream bán hàng với chốt đơn tức thời](exercises/live-streaming-live-shopping-checkout-sync/)
+  - [Hội thảo trực tuyến với nhiều người thuyết trình](exercises/live-streaming-webinar-multi-presenter-mixing/)
+  - [Lớp học trực tuyến kéo dài nhiều giờ với tương tác hai chiều](exercises/live-streaming-online-classroom-interactive-sync/)
+- **Reconciliation flow giữa nhiều hệ thống thanh toán** — Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau — e-commerce, marketplace đa seller, SaaS thuê bao, ứng dụng gọi xe, ngân hàng số, và sàn giao dịch crypto — nhằm luyện đủ các góc của flow đối soát (reconciliation) dữ liệu tiền giữa nhiều hệ thống (tính đúng đắn tuyệt đối, xử lý lệch/mismatch, idempotency, xử lý giao dịch bị hoàn/hủy, báo cáo audit).
+  - [E-commerce đối soát giao dịch giữa cổng thanh toán và hệ thống đơn hàng](exercises/reconciliation-ecommerce-payment-gateway-orders/)
+  - [Ngân hàng số đối soát giao dịch với đối tác thanh toán/mạng thẻ](exercises/reconciliation-digital-bank-card-network/)
+  - [Sàn giao dịch crypto đối soát số dư giữa ví on-chain và ledger nội bộ](exercises/reconciliation-crypto-onchain-ledger/)
+  - [Marketplace đa seller đối soát payout cho người bán](exercises/reconciliation-marketplace-seller-payout/)
+  - [SaaS thuê bao đối soát billing nội bộ với payment processor](exercises/reconciliation-saas-subscription-billing-processor/)
+  - [Ứng dụng gọi xe đối soát cuốc xe, tiền tài xế và hoa hồng](exercises/reconciliation-ride-hailing-trip-driver-payout/)
+- **Search indexing/autocomplete pipeline flow** — Các đề bài dưới đây trải qua nhiều bối cảnh web khác nhau — e-commerce, marketplace đa category, mạng xã hội, SaaS help center, nền tảng tuyển dụng, và bất động sản — nhằm luyện đủ các góc của flow lập chỉ mục tìm kiếm và gợi ý autocomplete (đồng bộ real-time, độ trễ index, xếp hạng kết quả, cá nhân hóa, chi phí vận hành index lớn).
+  - [E-commerce tìm kiếm và gợi ý sản phẩm](exercises/search-indexing-ecommerce-product-search/)
+  - [Mạng xã hội tìm kiếm người dùng, hashtag và bài viết](exercises/search-indexing-social-user-hashtag-post/)
+  - [Nền tảng bất động sản tìm kiếm theo bản đồ và autocomplete địa chỉ](exercises/search-indexing-real-estate-map-autocomplete/)
+  - [Marketplace đa category với facet lọc khác biệt hoàn toàn](exercises/search-indexing-marketplace-multi-category-facet/)
+  - [SaaS help center tìm kiếm ngữ nghĩa tài liệu trợ giúp](exercises/search-indexing-saas-help-center-semantic/)
+  - [Nền tảng tuyển dụng với yêu cầu độ tươi mới của tin đăng](exercises/search-indexing-job-board-listing-freshness/)
 
 ## Race condition, xử lý đồng thời cao, timing-sensitive
 
-- [Deadlock detection & transaction isolation levels flow](04-race-condition/deadlock-detection-transaction-isolation-levels-flow.md)
-- [Zero-downtime schema migration & dual-write flow](04-race-condition/zero-downtime-schema-migration-dual-write-flow.md)
-- [Flash sale/high-concurrency checkout flow](04-race-condition/flash-sale-high-concurrency-checkout-flow.md)
-- [Inventory reservation flow](04-race-condition/inventory-reservation-flow.md)
-- [Payment flow (xử lý giao dịch + callback + đối soát)](04-race-condition/payment-flow.md)
-- [Optimistic vs pessimistic locking flow](04-race-condition/optimistic-vs-pessimistic-locking-flow.md)
+- **Deadlock detection & transaction isolation levels flow** — Các đề bài dưới đây đi qua nhiều loại hệ thống web khác nhau (ngân hàng số, e-commerce, đặt phòng khách sạn, quản lý kho, mạng xã hội) để luyện việc phát hiện/xử lý deadlock giữa các transaction và chọn đúng isolation level cho từng tình huống đọc/ghi đồng thời.
+  - [Chuyển tiền nội bộ giữa các tài khoản ngân hàng số](exercises/deadlock-digital-bank-internal-transfer/)
+  - [Đặt phòng khách sạn với cập nhật giá và tồn phòng cùng lúc](exercises/deadlock-hotel-price-inventory-update/)
+  - [Cập nhật điểm số và thứ hạng leaderboard trong game/app học tập](exercises/deadlock-game-leaderboard-update/)
+  - [Transaction checkout chạm nhiều bảng (đơn hàng, tồn kho, mã giảm giá) trên sàn e-commerce](exercises/deadlock-ecommerce-order-inventory-coupon/)
+  - [Chuyển hàng liên kho hai chiều với nhiều SKU trong một lần chuyển](exercises/deadlock-warehouse-bidirectional-transfer/)
+- **Zero-downtime schema migration & dual-write flow** — Các đề bài dưới đây đi qua nhiều loại hệ thống web (mạng xã hội, e-commerce, fintech, logistics, SaaS đa tenant) để luyện việc đổi schema/đổi field/tách bảng mà không downtime, xử lý dual-write giữa schema cũ và mới khi traffic vẫn chạy liên tục.
+  - [Tách bảng `orders` thành `orders` + `order_items` không downtime (e-commerce)](exercises/schema-migration-ecommerce-orders-split/)
+  - [Đổi đơn vị tiền tệ lưu trữ từ float sang integer (cents) trong hệ thống fintech](exercises/schema-migration-fintech-currency-cents/)
+  - [Đổi từ multi-tenant chung schema sang schema-per-tenant trong SaaS B2B](exercises/schema-migration-b2b-saas-schema-per-tenant/)
+  - [Tách comment dạng nested JSON trong bảng posts sang bảng comment quan hệ riêng (mạng xã hội)](exercises/schema-migration-social-posts-comments-split/)
+  - [Đổi cấu trúc lưu trạng thái vận đơn từ 1 cột status sang bảng lịch sử trạng thái (logistics)](exercises/schema-migration-logistics-shipment-status-history/)
+- **Flash sale/high-concurrency checkout flow** — Các đề bài dưới đây đi qua nhiều loại hệ thống bán hàng theo sự kiện (flash sale e-commerce, bán giày/đồ hiếm giới hạn, bán vé sự kiện, bán suất ưu đãi ngân hàng) để luyện xử lý lượng request đồng thời cực lớn đổ vào một số lượng tài nguyên rất hạn chế tại đúng 1 thời điểm mở bán.
+  - [Flash sale số lượng giới hạn trên sàn e-commerce (100 sản phẩm, hàng chục nghìn người chờ)](exercises/flash-sale-ecommerce-limited-stock/)
+  - [Bán giày phiên bản giới hạn (sneaker drop) chống bot mua sạch hàng](exercises/flash-sale-sneaker-drop-anti-bot/)
+  - [Mở bán suất vay ưu đãi lãi suất thấp giới hạn số lượng của ngân hàng số](exercises/flash-sale-digital-bank-loan-offer/)
+  - [Mở bán vé concert số lượng giới hạn với chọn ghế cụ thể](exercises/flash-sale-event-ticketing-seat-selection/)
+- **Inventory reservation flow** — Các đề bài dưới đây đi qua nhiều loại hệ thống có tồn kho hữu hạn (e-commerce đa kênh, marketplace nhiều seller, F&B đặt nguyên liệu, thời trang có size/màu, dropshipping) để luyện việc đặt trước/giữ/trả lại tồn kho chính xác dưới tải đồng thời cao.
+  - [Giữ tồn kho khi thêm vào giỏ hàng trên sàn e-commerce nhiều kho](exercises/inventory-reservation-ecommerce-multi-warehouse/)
+  - [Giữ tồn kho khi seller và buyer thao tác đồng thời trên marketplace C2C](exercises/inventory-reservation-c2c-marketplace/)
+  - [Đặt trước hàng dropshipping khi tồn kho thực tế nằm ở nhà cung cấp bên thứ ba](exercises/inventory-reservation-dropshipping-supplier/)
+  - [Trừ tồn nguyên liệu dùng chung nhiều món khi quán ăn nhận đơn đồng thời](exercises/inventory-reservation-fnb-shared-ingredient/)
+  - [Đặt trước tồn kho theo biến thể size/màu khi tồn kho tổng vẫn hiển thị "còn hàng"](exercises/inventory-reservation-fashion-size-color-variant/)
+- **Payment flow (xử lý giao dịch + callback + đối soát)** — Các đề bài dưới đây đi qua nhiều loại hệ thống có xử lý thanh toán (e-commerce, subscription SaaS, ví điện tử, cổng thanh toán tổng hợp, thương mại xuyên biên giới) để luyện xử lý giao dịch thanh toán, callback/webhook không đảm bảo thứ tự hoặc bị gửi trùng, và đối soát dữ liệu với bên thứ ba.
+  - [Thanh toán qua cổng bên thứ ba với webhook callback không đảm bảo thứ tự](exercises/payment-gateway-webhook-out-of-order/)
+  - [Cổng thanh toán tổng hợp (payment orchestration) định tuyến qua nhiều nhà cung cấp](exercises/payment-orchestration-multi-provider-routing/)
+  - [Thanh toán thương mại xuyên biên giới với chuyển đổi tiền tệ và callback đa múi giờ](exercises/payment-cross-border-multi-timezone-callback/)
+  - [Job tính phí renewal tự động chạy trùng lúc khách tự đổi gói/hủy gói trên subscription SaaS](exercises/payment-saas-subscription-renewal-race/)
+  - [Nạp tiền và thanh toán từ ví điện tử chạm cùng 1 số dư gần như đồng thời](exercises/payment-ewallet-balance-concurrent-topup-payment/)
+- **Optimistic vs pessimistic locking flow** — Các đề bài dưới đây đi qua nhiều loại hệ thống web khác nhau (quản lý nội dung/CMS, quản lý dự án cộng tác, chỉnh sửa hồ sơ khách hàng trong CRM, quản lý kho, chỉnh sửa cấu hình hệ thống nội bộ) để luyện việc chọn đúng giữa optimistic locking (version check) và pessimistic locking (khóa trước khi đọc/sửa) tùy theo đặc thù tần suất xung đột và trải nghiệm cần có.
+  - [Chỉnh sửa bài viết CMS bởi nhiều biên tập viên](exercises/locking-cms-concurrent-editing/)
+  - [Chỉnh sửa kế hoạch dự án (Gantt chart) trong tool quản lý dự án cộng tác](exercises/locking-project-management-gantt-collaborative/)
+  - [Chỉnh sửa cấu hình hệ thống nội bộ (feature flag, config) bởi nhiều kỹ sư](exercises/locking-internal-config-multi-engineer/)
+  - [Sale và chăm sóc khách hàng cùng sửa hồ sơ 1 khách hàng trên CRM](exercises/locking-crm-customer-profile-concurrent-edit/)
+  - [Kiểm kho định kỳ diễn ra song song với các giao dịch xuất/nhập kho khác](exercises/locking-warehouse-stocktake-concurrent-transactions/)
 
 ## Concurrency, real-time, phân tán ở mức lõi backend web
 
-- [Consensus algorithm flow (Raft/Paxos: leader election, log replication)](05-distributed-systems/consensus-algorithm-flow.md)
-- [Distributed lock & leader election flow (lease-based, Redis/ZooKeeper)](05-distributed-systems/distributed-lock-leader-election-flow.md)
-- [Event sourcing/Saga pattern flow (rollback/compensate xuyên nhiều service)](05-distributed-systems/event-sourcing-saga-pattern-flow.md)
-- [Consistent hashing & sharding/partitioning flow](05-distributed-systems/consistent-hashing-sharding-partitioning-flow.md)
-- [CAP theorem & tunable consistency (quorum read/write) flow](05-distributed-systems/cap-theorem-tunable-consistency-flow.md)
-- [Write-ahead log (WAL) & crash recovery/durability flow](05-distributed-systems/write-ahead-log-wal-crash-recovery-durability-flow.md)
-- [Circuit breaker & retry with backoff flow](05-distributed-systems/circuit-breaker-retry-with-backoff-flow.md)
-- [Cache invalidation flow](05-distributed-systems/cache-invalidation-flow.md)
-- [Rate limiting/throttling flow](05-distributed-systems/rate-limiting-throttling-flow.md)
+- **Consensus algorithm flow (Raft/Paxos: leader election, log replication)** — Các đề bài dưới đây đi qua nhiều bối cảnh cần đồng thuận phân tán — config/feature-flag store, database phân tán chia range, cụm game server real-time, message broker tự xây, và sổ cái tài chính — nhằm luyện đủ các khía cạnh của leader election, log replication, và xử lý network partition/crash trong hệ thống web thực tế.
+  - [Distributed config/feature-flag store nội bộ (etcd-like)](exercises/consensus-config-store-etcd-like/)
+  - [Distributed SQL database chia theo range/shard (CockroachDB-like)](exercises/consensus-distributed-sql-sharding/)
+  - [Sổ cái giao dịch tài chính nội bộ (ledger) yêu cầu linearizability nghiêm ngặt](exercises/consensus-financial-ledger-linearizability/)
+  - [Cụm game server real-time đồng thuận trạng thái trận đấu](exercises/consensus-realtime-game-server-cluster/)
+  - [Message broker tự xây đồng thuận thứ tự message](exercises/consensus-custom-message-broker-ordering/)
+- **Distributed lock & leader election flow (lease-based, Redis/ZooKeeper)** — Các đề bài dưới đây đi qua nhiều bối cảnh cần khóa/bầu leader phân tán — cron job trên nhiều instance, giữ chỗ tồn kho flash sale, chống thundering herd cho cache, phân việc cho worker pool, và điều phối deploy đa vùng — nhằm luyện cơ chế lease-based lock, xử lý crash/fencing token và failover trong web app thực tế.
+  - [Cron/scheduled job chạy trên nhiều instance service (horizontally scaled)](exercises/distributed-lock-cron-job-scaled-instances/)
+  - [Leader coordinator cho cache invalidation tránh thundering herd](exercises/distributed-lock-cache-thundering-herd/)
+  - [Điều phối deploy đa vùng (multi-region) tránh deploy trùng](exercises/distributed-lock-multi-region-deploy-coordination/)
+  - [Giữ chỗ tồn kho cho sản phẩm flash sale](exercises/distributed-lock-flash-sale-inventory-reservation/)
+  - [Phân việc cho worker pool xử lý hàng đợi công việc lớn](exercises/distributed-lock-worker-pool-job-distribution/)
+- **Event sourcing/Saga pattern flow (rollback/compensate xuyên nhiều service)** — Các đề bài dưới đây đi qua nhiều bối cảnh cần điều phối transaction nghiệp vụ xuyên service — checkout e-commerce, đặt combo du lịch, payout marketplace, vòng đời chuyến đi ride-hailing, và thay đổi subscription — nhằm luyện thiết kế saga step/compensate, event log, và khả năng resume sau crash trong web app thực tế.
+  - [Checkout e-commerce nhiều bước (payment + inventory + shipping)](exercises/saga-ecommerce-checkout/)
+  - [Đặt combo du lịch (vé máy bay + khách sạn + thuê xe)](exercises/saga-travel-combo-booking/)
+  - [Nâng/hạ cấp gói subscription xuyên nhiều service (billing + entitlement + notification)](exercises/saga-subscription-plan-change/)
+  - [Chi trả tiền cho seller trên nền tảng marketplace sau khi đơn hàng hoàn tất](exercises/saga-marketplace-seller-payout/)
+  - [Điều phối vòng đời một chuyến đi ride-hailing qua nhiều bước](exercises/saga-ride-hailing-trip-lifecycle/)
+- **Consistent hashing & sharding/partitioning flow** — Các đề bài dưới đây đi qua nhiều bối cảnh cần chia dữ liệu ra nhiều node — resharding cụm cache, session store quy mô lớn, distributed rate limiter, time-series metrics, và lưu trữ tin nhắn theo conversation — nhằm luyện kỹ thuật consistent hashing/virtual node, xử lý rebalance khi scale, và tránh hot key/hot partition trong web app thực tế.
+  - [Resharding cụm cache phân tán (Redis Cluster-like) khi scale](exercises/consistent-hashing-redis-cluster-resharding/)
+  - [Sharding lưu trữ time-series metrics theo thời gian và theo nguồn](exercises/consistent-hashing-time-series-metrics/)
+  - [Sharding lưu trữ tin nhắn theo conversation cho app chat](exercises/consistent-hashing-chat-message-sharding/)
+  - [Session store quy mô lớn cho hàng chục triệu user online](exercises/consistent-hashing-largescale-session-store/)
+  - [Distributed rate limiter sharding theo user/API key](exercises/consistent-hashing-distributed-rate-limiter/)
+- **CAP theorem & tunable consistency (quorum read/write) flow** — Các đề bài dưới đây đi qua nhiều bối cảnh cần đánh đổi giữa availability và consistency — giỏ hàng e-commerce, follow/follower mạng xã hội, metrics giám sát hạ tầng, session checkout, và bộ đếm tồn kho flash sale — nhằm luyện cách cấu hình quorum (N, W, R), xử lý network partition theo đúng CAP, và công khai rõ mức consistency guarantee trong web app thực tế.
+  - [Distributed key-value store cho giỏ hàng (shopping cart)](exercises/cap-theorem-shopping-cart-kv-store/)
+  - [Session store cần nhất quán cao hơn cho hành động nhạy cảm (thanh toán)](exercises/cap-theorem-payment-session-consistency/)
+  - [Bộ đếm tồn kho theo mô hình quorum-based cho flash sale](exercises/cap-theorem-flash-sale-quorum-counter/)
+  - [Bộ đếm follower và quan hệ follow/unfollow cho mạng xã hội](exercises/cap-theorem-social-follow-follower-counter/)
+  - [Metrics giám sát hạ tầng nội bộ cho dashboard tổng hợp và cảnh báo khẩn cấp](exercises/cap-theorem-infra-metrics-dashboard-alerting/)
+- **Write-ahead log (WAL) & crash recovery/durability flow** — Các đề bài dưới đây đi qua nhiều bối cảnh cần đảm bảo dữ liệu không mất khi crash — storage engine tự xây, message queue broker, ledger ngân hàng số, order processing dùng cache in-memory, và node trong distributed KV store — nhằm luyện cách ghi log trước khi apply, replay đúng thứ tự, checkpoint, và đo RPO/RTO trong web app thực tế.
+  - [Database engine tự xây dựng cho ứng dụng nội bộ](exercises/wal-custom-database-engine/)
+  - [WAL cho transaction log tài khoản ngân hàng số](exercises/wal-digital-bank-transaction-log/)
+  - [Node lưu trữ trong distributed KV store dùng WAL cho từng node cục bộ](exercises/wal-distributed-kv-store-node/)
+  - [WAL cho message queue broker tự xây đảm bảo message không mất](exercises/wal-message-queue-broker/)
+  - [WAL backup cho hệ thống xử lý đơn hàng dùng in-memory cache tăng tốc](exercises/wal-order-processing-in-memory-cache/)
+- **Circuit breaker & retry with backoff flow** — Các đề bài dưới đây đi qua nhiều bối cảnh cần bảo vệ hệ thống khi gọi dịch vụ bên ngoài không ổn định — payment gateway, API vận chuyển, LLM/AI provider, API bản đồ cho ride-hailing, và core banking legacy — nhằm luyện cách cấu hình ngưỡng mở circuit breaker, retry an toàn với backoff/jitter, và fallback hợp lý trong web app thực tế.
+  - [Checkout gọi payment gateway bên thứ ba](exercises/circuit-breaker-checkout-payment-gateway/)
+  - [SaaS gọi LLM/AI provider bên thứ ba cho tính năng chat AI](exercises/circuit-breaker-llm-provider-chat-ai/)
+  - [Ngân hàng số gọi hệ thống core banking nội bộ (legacy)](exercises/circuit-breaker-digital-bank-legacy-core/)
+  - [Tạo vận đơn qua API đối tác vận chuyển (shipping carrier)](exercises/circuit-breaker-shipping-carrier-api/)
+  - [Tính route/ETA qua API bản đồ bên thứ ba cho ride-hailing](exercises/circuit-breaker-ridehailing-maps-routing/)
+- **Cache invalidation flow** — Các đề bài dưới đây đi qua nhiều bối cảnh cần giữ cache đồng bộ với dữ liệu gốc — trang chi tiết sản phẩm e-commerce, profile/feed mạng xã hội, CMS/blog nhiều tầng cache, permission cache cho phân quyền, và giá/tồn kho flash sale — nhằm luyện chiến lược invalidate theo event, xử lý race condition, và tránh cache stampede trong web app thực tế.
+  - [Cache trang chi tiết sản phẩm cho e-commerce](exercises/cache-invalidation-ecommerce-product-page/)
+  - [Cache session/permission cho hệ thống phân quyền](exercises/cache-invalidation-session-permission/)
+  - [Cache giá/tồn kho trong flash sale với tần suất thay đổi cực cao](exercises/cache-invalidation-flash-sale-price-inventory/)
+  - [Cache feed/trang cá nhân cho mạng xã hội](exercises/cache-invalidation-social-feed-profile/)
+  - [Cache nhiều tầng cho CMS/blog](exercises/cache-invalidation-cms-multilayer/)
+- **Rate limiting/throttling flow** — Các đề bài dưới đây đi qua nhiều bối cảnh cần kiểm soát tốc độ request — API gateway public đa khách hàng, chống brute-force login, tôn trọng rate limit đối tác bên ngoài, chống spam chat, và throttling checkout flash sale — nhằm luyện thuật toán rate limit cụ thể, xử lý counter phân tán nhiều instance, và cân bằng giữa bảo vệ hệ thống với trải nghiệm người dùng trong web app thực tế.
+  - [API gateway public cho SaaS đa khách hàng (per-API-key rate limit)](exercises/rate-limiting-saas-api-gateway-per-key/)
+  - [Chống brute-force ở endpoint đăng nhập](exercises/rate-limiting-login-brute-force/)
+  - [Throttling request checkout trong flash sale để bảo vệ hệ thống backend](exercises/rate-limiting-flash-sale-checkout-throttle/)
+  - [Tôn trọng rate limit của đối tác bên ngoài khi gửi SMS/OTP](exercises/rate-limiting-external-partner-sms-gateway/)
+  - [Chống spam tin nhắn trong app chat/group](exercises/rate-limiting-chat-spam-prevention/)

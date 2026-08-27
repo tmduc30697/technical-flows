@@ -1,0 +1,12 @@
+# Trừ tồn nguyên liệu dùng chung nhiều món khi quán ăn nhận đơn đồng thời
+
+**Hệ thống:** Một hệ thống order F&B cho nhà hàng/quán ăn, nhận đơn qua nhiều kênh (tại chỗ, app riêng, đối tác giao đồ ăn), mỗi món dùng nguyên liệu lấy từ kho bếp chung, và 1 nguyên liệu có thể xuất hiện trong công thức của nhiều món khác nhau.
+
+**Vai trò của flow:** Flow reservation nguyên liệu phải trừ đúng số lượng theo công thức khi đơn được xác nhận, xử lý đúng khi nhiều đơn hàng từ các kênh khác nhau cùng cần chung 1 nguyên liệu sắp hết trong cùng thời điểm.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: đơn hàng 1 (từ app) gọi món "Phở bò" và đơn hàng 2 (khách tại chỗ) gọi món "Bún bò", cả 2 món cùng dùng nguyên liệu "thịt bò" mà kho chỉ còn đủ cho 1 trong 2 món, 2 đơn đến gần như đồng thời từ 2 kênh khác nhau — yêu cầu update nguyên tử trừ tồn nguyên liệu có điều kiện đủ số lượng, đơn nào trừ được trước thì món đó được xác nhận, đơn kia phải nhận báo "hết nguyên liệu, món tạm ngừng phục vụ" ngay lập tức, không phải sau khi đã in phiếu chế biến gửi xuống bếp.
+- Với 1 đơn gồm nhiều món và mỗi món có thể chia sẻ nguyên liệu với món khác trong cùng đơn, yêu cầu trừ đồng thời tất cả nguyên liệu liên quan của toàn bộ các món trong 1 transaction atomic duy nhất khi xác nhận đơn (không xác nhận từng món riêng lẻ), để tránh trường hợp món đầu trừ được nguyên liệu thành công nhưng món sau trong cùng đơn phát hiện thiếu nguyên liệu khác giữa chừng, khiến đơn hàng rơi vào trạng thái nửa xác nhận nửa không.
+- Khi tồn 1 nguyên liệu giảm xuống dưới ngưỡng cảnh báo (ví dụ chỉ đủ cho dưới 3 suất), yêu cầu các món dùng nguyên liệu đó phải được đánh dấu "sắp hết"/tạm ẩn trên menu hiển thị theo thời gian gần thực trên tất cả các kênh, tránh khách tiếp tục đặt món chắc chắn sẽ bị từ chối vì nguyên liệu vừa bị đơn khác đặt trước đó vài giây dùng hết.
+- Khi 1 đơn bị hủy sau khi đã trừ nguyên liệu (khách đổi ý trước khi bếp bắt đầu chế biến), việc hoàn trả nguyên liệu về kho phải atomic và chỉ được thực hiện nếu đơn hủy trước mốc thời gian rõ ràng (ví dụ trước khi bếp xác nhận bắt đầu chế biến), tránh hoàn nhầm nguyên liệu đã thực sự được dùng để chế biến món.
+- Với các kênh bán (app, tại chỗ, đối tác giao đồ ăn) cùng dùng chung 1 kho nguyên liệu vật lý, quy định độ trễ đồng bộ tồn kho nguyên liệu chấp nhận được giữa các kênh, và cơ chế chặn nhận đơn mới ngay khi 1 kênh phát hiện nguyên liệu vừa hết, để các kênh còn lại không tiếp tục nhận đơn dựa trên số liệu tồn kho đã lỗi thời.
