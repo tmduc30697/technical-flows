@@ -1,6 +1,6 @@
 # Service discovery & health check flow — Đề bài thực hành
 
-Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (nền tảng microservices SaaS, hệ thống IoT, hạ tầng multi-region, service mesh nội bộ) để luyện việc đăng ký, phát hiện và theo dõi sức khỏe service một cách đúng đắn.
+Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (nền tảng microservices SaaS, chuỗi bán lẻ đa chi nhánh, hạ tầng multi-region, service mesh nội bộ) để luyện việc đăng ký, phát hiện và theo dõi sức khỏe service một cách đúng đắn.
 
 ---
 
@@ -52,3 +52,20 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (nền
 - Nếu control plane (nơi lưu danh sách service) tạm thời không phản hồi được, sidecar phải dùng danh sách cache gần nhất để tiếp tục hoạt động (fail open có kiểm soát), không được để toàn bộ traffic đứng lại vì mất kết nối tới control plane.
 - Đảm bảo health check không tạo ra tải đáng kể lên chính service bị check (tránh trường hợp health check dày đặc làm chậm thêm service đang yếu) — có backoff khi liên tục fail.
 - Viết cơ chế báo cáo rõ nguyên nhân một pod bị đánh unhealthy (timeout, HTTP 5xx, connection refused) để team vận hành debug nhanh, không chỉ trả về "unhealthy" chung.
+
+---
+
+## Service discovery & health check cho hàng nghìn thiết bị POS tại chuỗi cửa hàng bán lẻ kết nối không liên tục
+
+**Repository:** `service-discovery-retail-pos-intermittent-connectivity`
+
+**Hệ thống:** Một nền tảng quản lý hàng nghìn thiết bị điểm bán hàng (POS) tại các chi nhánh bán lẻ trên toàn quốc, mỗi thiết bị kết nối qua đường truyền internet riêng của cửa hàng (chất lượng khác nhau tùy khu vực, có SIM 4G dự phòng khi đứt cáp) và tự động ngắt kết nối/vào chế độ nghỉ ngoài giờ mở cửa của cửa hàng.
+
+**Vai trò của flow:** Health check ở đây khác căn bản so với service backend thông thường — một thiết bị "không phản hồi" có thể đơn giản là cửa hàng đã đóng cửa theo giờ bình thường, không phải thiết bị đã hỏng hay mất kết nối thật, nên flow phải phân biệt được hai trạng thái này để tránh báo động giả hàng loạt gây nhiễu đội vận hành.
+
+**Yêu cầu cụ thể:**
+- Mỗi thiết bị khi đăng ký vào hệ thống phải khai báo lịch hoạt động dự kiến của chi nhánh (giờ mở/đóng cửa, ngày nghỉ lễ) thay vì áp dụng một ngưỡng timeout cố định chung cho mọi thiết bị — health check phải so sánh thời gian im lặng thực tế với lịch riêng của từng chi nhánh để quyết định có bất thường hay không.
+- Xử lý trường hợp một thiết bị không online đúng giờ mở cửa dự kiến của chi nhánh (quá giờ mở cửa mà chưa thấy tín hiệu) — trước khi báo động, phải có một khoảng đệm (grace window) tính đến các yếu tố như nhân viên mở cửa trễ vài phút, đường truyền internet cửa hàng khởi động chậm, thay vì báo "chết" ngay khi vừa trễ lịch một chút.
+- Đảm bảo hệ thống phân biệt rõ ba trạng thái riêng biệt cho mỗi thiết bị (đang hoạt động, đang nghỉ theo giờ đóng cửa bình thường, mất kết nối bất thường/nghi ngờ hỏng) thay vì chỉ hai trạng thái healthy/unhealthy nhị phân — mỗi trạng thái cần hành vi vận hành khác nhau (không cảnh báo, không cảnh báo, cảnh báo cần xử lý).
+- Xử lý tình huống hàng loạt thiết bị trong cùng một khu vực đột ngột mất kết nối cùng lúc (nhà mạng khu vực gặp sự cố, đứt cáp quang vùng) — hệ thống cần phát hiện đây là sự cố hạ tầng mạng theo khu vực (correlation theo vị trí địa lý chi nhánh) để gộp thành một cảnh báo duy nhất, thay vì tạo ra hàng trăm cảnh báo "thiết bị chết" riêng lẻ làm ngập hệ thống thông báo và khiến đội vận hành bỏ sót cảnh báo thật sự quan trọng (ví dụ 1 chi nhánh riêng lẻ bị hỏng máy POS thật giữa lúc đang có sự cố mạng diện rộng).
+- Thiết kế cơ chế heartbeat tiết kiệm chi phí dữ liệu qua đường truyền dự phòng (SIM 4G có giới hạn dung lượng, không thể ping dồn dập như service check nội bộ thông thường) — cân nhắc mô hình thiết bị chủ động báo cáo trạng thái theo chu kỳ dài hơn khi đang chạy trên đường truyền dự phòng, kèm cơ chế nền tảng chủ động gửi lệnh kiểm tra khẩn qua kênh riêng khi cần xác minh gấp một thiết bị nghi ngờ gặp sự cố, thay vì chờ tới chu kỳ báo cáo tiếp theo mới biết được.

@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (SaaS 
 - Đảm bảo việc phân chia traffic vào canary của mô hình mới không làm sai lệch dữ liệu dùng để train các mô hình tương lai (tránh feedback loop — mô hình mới ảnh hưởng hành vi user rồi dữ liệu đó lại dùng để train tiếp gây thiên lệch không kiểm soát).
 - Thiết kế thời gian canary đủ dài để loại trừ yếu tố thời điểm (ví dụ hành vi mua hàng khác nhau giữa ngày thường và cuối tuần) trước khi kết luận mô hình mới tốt hơn hay kém hơn, tránh quyết định dựa trên mẫu dữ liệu quá ngắn/thiên lệch.
 - Có khả năng rollback tức thời về mô hình cũ nếu phát hiện mô hình mới serving ra kết quả bất thường/không phù hợp (ví dụ gợi ý sản phẩm không liên quan hoặc vi phạm chính sách nội dung) mà không cần chờ phân tích đầy đủ metric dài hạn.
+
+---
+
+## Canary deployment cho luồng checkout của sàn e-commerce trong giờ cao điểm
+
+**Repository:** `canary-deployment-ecommerce-checkout-highstakes`
+
+**Hệ thống:** Một sàn e-commerce có luồng checkout tách riêng khỏi các dịch vụ khác (dashboard quản trị, catalog, tìm kiếm), xử lý trực tiếp thanh toán và ảnh hưởng doanh thu theo từng phút.
+
+**Vai trò của flow:** Canary ở đây phải giới hạn phạm vi đúng vào service checkout, tăng tỷ lệ traffic rất thận trọng, và có khả năng phát hiện + rollback trong vài chục giây vì mỗi phút lỗi thanh toán đều mất tiền thật, khác hẳn với canary một dashboard nội bộ ít rủi ro.
+
+**Yêu cầu cụ thể:**
+- Giai đoạn canary đầu tiên chỉ nên nhận một tỷ lệ traffic rất nhỏ (ví dụ dưới 1%) và ưu tiên chọn ngẫu nhiên theo request chứ không theo user cố định, để một lỗi ở phiên bản mới không lặp lại nhiều lần trên cùng một khách hàng gây trải nghiệm tệ liên tục.
+- Định nghĩa metric rollback riêng cho checkout khác với metric kỹ thuật thông thường — không chỉ tỷ lệ lỗi 5xx mà cả tỷ lệ giao dịch thanh toán thất bại/timeout ở cổng thanh toán, vì phiên bản mới có thể trả về 200 OK nhưng vẫn gọi sai tham số khiến cổng thanh toán từ chối giao dịch.
+- Xử lý trường hợp một đơn hàng đã bắt đầu ở phiên bản canary (đã giữ tồn kho, đã tạo intent thanh toán) nhưng canary bị rollback giữa chừng do phát hiện lỗi — đơn hàng đó phải được hoàn tất hoặc hoàn tác một cách nhất quán, không để đơn ở trạng thái treo dở dang khi traffic chuyển hết về phiên bản cũ.
+- Đảm bảo cơ chế giám sát tỷ lệ lỗi thanh toán phải tính riêng theo phiên bản (canary vs stable) theo thời gian gần thực (vài giây tới một phút), vì đợi tổng hợp báo cáo theo giờ là quá chậm để tránh thiệt hại doanh thu khi canary có lỗi.
+- Thiết kế cơ chế rollback tự động không cần chờ người trực ca xác nhận thủ công đối với các ngưỡng lỗi nghiêm trọng đã định nghĩa trước (ví dụ tỷ lệ thanh toán thất bại tăng gấp đôi so với baseline trong 2 phút), vì tốc độ phản ứng ở đây quan trọng hơn quy trình phê duyệt nhiều bước.
+
+---
+
+## Canary rollout cho backend mobile phải serving song song nhiều phiên bản app cũ
+
+**Repository:** `canary-deployment-mobile-backend-api-versioning`
+
+**Hệ thống:** Một backend phục vụ ứng dụng mobile, trong đó người dùng không update app đồng loạt — tại một thời điểm, backend phải phục vụ đồng thời nhiều phiên bản app khác nhau đang cài trên máy người dùng, có thể chênh nhau nhiều tháng phát hành.
+
+**Vai trò của flow:** Canary deployment ở đây không chỉ kiểm tra phiên bản backend mới có lỗi hay không, mà còn phải đảm bảo phiên bản mới không phá vỡ hợp đồng API mà các phiên bản app cũ đang phụ thuộc, vì không thể ép người dùng update app ngay lập tức.
+
+**Yêu cầu cụ thể:**
+- Trước khi canary, phải xác định rõ tập các phiên bản app cũ tối thiểu còn cần hỗ trợ (dựa trên số liệu người dùng thực tế đang dùng phiên bản nào) và test hợp đồng API mới với từng phiên bản đó, không chỉ test với app mới nhất.
+- Traffic canary phải được phân chia sao cho bao gồm cả request từ app phiên bản cũ lẫn mới, không chỉ dồn canary vào nhóm user đã update app mới nhất — nếu không, lỗi tương thích ngược chỉ lộ ra sau khi đã mở rộng traffic lên cao.
+- Xử lý trường hợp phiên bản backend mới đổi định dạng response (thêm field bắt buộc, đổi kiểu dữ liệu) khiến app cũ không parse được — phải phát hiện qua tỷ lệ crash/lỗi parse tăng bất thường ở nhóm client cũ trong lúc canary, tách biệt với lỗi kỹ thuật chung của backend.
+- Đảm bảo cơ chế theo dõi lỗi trong canary phân tách được theo phiên bản app gọi tới (thông qua header version của client), để biết chính xác lỗi phát sinh ở nhóm client nào thay vì gộp chung tỷ lệ lỗi toàn bộ traffic, tránh bỏ sót lỗi chỉ ảnh hưởng một nhóm phiên bản cũ thiểu số.
+- Định nghĩa chiến lược rollback không đơn giản là "quay lại code cũ" nếu phiên bản mới đã bắt đầu ghi dữ liệu theo schema mới (ví dụ trường mở rộng cho tính năng mới) — dữ liệu đó vẫn phải đọc được bởi phiên bản cũ đang phục vụ các client legacy sau khi rollback, tránh gãy tương thích ngược thêm lần nữa.

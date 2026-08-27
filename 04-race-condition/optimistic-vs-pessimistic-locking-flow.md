@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống web khác nhau
 - Với action khẩn cấp (ví dụ "tắt flag ngay" trong sự cố production), nên có đường xử lý riêng ưu tiên ghi đè ngay không chờ optimistic lock thông thường (bỏ qua version check hoặc có nút "buộc lưu" rõ ràng có cảnh báo), vì trong tình huống khẩn cấp việc bị chặn bởi conflict version có thể gây chậm trễ nguy hiểm hơn rủi ro ghi đè nhầm — nhưng phải log rõ ràng và cảnh báo action này đã bỏ qua kiểm tra xung đột.
 - Mọi thay đổi config (dù qua optimistic lock thông thường hay đường khẩn cấp) phải được ghi lịch sử đầy đủ và không thể xóa (audit log immutable): ai, khi nào, giá trị trước/sau, có phải action khẩn cấp không — để phục vụ điều tra sau sự cố nếu 1 thay đổi config gây ảnh hưởng không mong muốn.
 - Có cơ chế thông báo real-time cho các kỹ sư khác đang mở màn hình chỉnh sửa cùng 1 config khi có ai đó vừa lưu thay đổi (qua WebSocket/polling), để giảm khả năng họ submit dựa trên version đã lỗi thời và phải xử lý conflict muộn hơn cần thiết.
+
+---
+
+## Sale và chăm sóc khách hàng cùng sửa hồ sơ 1 khách hàng trên CRM
+
+**Repository:** `locking-crm-customer-profile-concurrent-edit`
+
+**Hệ thống:** Một hệ thống CRM quản lý khách hàng cho đội sale và đội chăm sóc khách hàng (CSKH), nhân viên sale cập nhật giai đoạn deal (pipeline stage), nhân viên CSKH cập nhật lịch sử liên hệ/ghi chú, cả 2 nhóm đều có thể mở cùng 1 hồ sơ khách hàng bất kỳ lúc nào.
+
+**Vai trò của flow:** Vì tần suất 2 nhân viên cùng mở đúng 1 hồ sơ tại cùng thời điểm là thấp nhưng hồ sơ khách hàng có nhiều nhóm trường thuộc các nghiệp vụ khác nhau (sale, CSKH, thông tin liên hệ chung), flow lưu hồ sơ cần chọn chiến lược lock cân bằng giữa việc không mất dữ liệu do ghi đè và không gây khó chịu khi nhân viên bị từ chối lưu vì xung đột ở trường hoàn toàn không liên quan tới phần họ đang sửa.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: nhân viên sale mở hồ sơ khách hàng C ở version 8, cập nhật giai đoạn deal từ "đang đàm phán" sang "chốt hợp đồng"; gần như cùng lúc nhân viên CSKH cũng mở hồ sơ C ở version 8, thêm 1 ghi chú cuộc gọi vừa thực hiện — nếu dùng optimistic lock ở cấp toàn bộ record, ai lưu sau sẽ bị từ chối dù 2 người sửa 2 nhóm trường hoàn toàn khác nhau; đánh giá phương án tách optimistic lock theo nhóm trường (version riêng cho nhóm "sale", nhóm "CSKH", nhóm "thông tin chung") để loại bỏ các xung đột giả kiểu này.
+- Với trường hợp thực sự xung đột trên cùng 1 trường (ví dụ cả sale và CSKH cùng sửa số điện thoại liên hệ chính của khách hàng gần như đồng thời do phát hiện thông tin cũ sai), quy định rõ optimistic lock ở đúng cấp nhóm trường đó phải từ chối người lưu sau và hiển thị giá trị mới nhất vừa được lưu, không tự động merge 2 số điện thoại khác nhau thành 1 giá trị mơ hồ.
+- Mô tả tình huống cần pessimistic lock: khi đang trong quy trình chuyển giao khách hàng từ nhân viên sale này sang nhân viên sale khác, cần khóa cứng toàn bộ hồ sơ trong vài giây để đảm bảo không ai (kể cả CSKH) sửa bất kỳ trường nào giữa chừng quá trình chuyển giao — quy định cơ chế khóa tường minh có timeout ngắn cho thao tác đặc biệt này, tách biệt rõ với cơ chế optimistic mặc định dùng cho các thao tác sửa thông thường hàng ngày.
+- Khi nhân viên bị từ chối lưu do conflict, giao diện phải chỉ rõ đúng trường/nhóm trường nào đã bị người khác thay đổi (không coi toàn bộ hồ sơ là "đã cũ"), để họ chỉ cần xác nhận lại đúng phần liên quan thay vì phải đọc lại và nhập lại toàn bộ nội dung đã soạn.
+- Mọi thay đổi hồ sơ khách hàng (theo từng nhóm trường) phải ghi lịch sử đầy đủ ai sửa, khi nào, giá trị trước/sau, để xử lý khiếu nại khi có tranh chấp nội bộ về việc ai đã cập nhật sai thông tin khách hàng dẫn đến hậu quả nghiệp vụ.
+
+---
+
+## Kiểm kho định kỳ diễn ra song song với các giao dịch xuất/nhập kho khác
+
+**Repository:** `locking-warehouse-stocktake-concurrent-transactions`
+
+**Hệ thống:** Một hệ thống quản lý kho cho chuỗi cửa hàng/nhà phân phối, định kỳ nhân viên thực hiện kiểm kho (đếm và đối chiếu số lượng thực tế) tại 1 khu vực kho, trong khi các giao dịch xuất/nhập kho khác của khu vực đó hoặc khu vực lân cận vẫn có thể đang chạy bình thường.
+
+**Vai trò của flow:** Flow kiểm kho phải chọn giữa khóa cứng (pessimistic) khu vực đang kiểm để đảm bảo số đếm chính xác tuyệt đối, hay dùng version check (optimistic) để không chặn hoạt động kho, tùy theo mức độ chấp nhận gián đoạn vận hành trong lúc kiểm.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: nhân viên bắt đầu kiểm kho khu vực A lúc 9:00, đếm được SKU X có 50 đơn vị; đúng lúc đó có phiếu xuất kho 5 đơn vị SKU X cho 1 đơn giao hàng đang được xử lý song song ở hệ thống — nếu không khóa khu vực trong lúc kiểm kho, số đếm 50 sẽ lệch so với số hệ thống ghi nhận ngay sau đó (45), gây báo cáo chênh lệch giả không phải do thất thoát thực; đánh giá phương án khóa cứng khu vực A (chặn mọi giao dịch xuất/nhập trong lúc đếm) so với phương án ghi nhận "thời điểm bắt đầu đếm" rồi đối chiếu với log các giao dịch xảy ra trong lúc đếm để tính lại số kỳ vọng đúng.
+- Nếu chọn khóa cứng, phải giới hạn phạm vi khóa đúng ở khu vực/kệ hàng đang kiểm (không khóa toàn kho), và quy định thời gian tối đa cho phép giữ khóa (ví dụ không quá 30 phút cho 1 khu vực), kèm cơ chế cảnh báo nếu nhân viên kiểm kho vượt thời gian quy định, để không chặn vận hành kho quá lâu.
+- Mô tả cụ thể trường hợp 2 nhân viên kiểm kho cùng lúc ở 2 khu vực có SKU trùng nhau (cùng loại hàng lưu ở 2 kệ khác nhau nhưng thuộc cùng SKU tổng) — quy định rõ ranh giới khóa nên theo vị trí vật lý (kệ/khu vực) hay theo SKU tổng, và hệ quả nếu chọn sai (khóa theo SKU tổng sẽ chặn lẫn nhau dù 2 nhân viên đang đếm 2 vị trí hoàn toàn khác nhau, gây mất thời gian chờ không cần thiết).
+- Mô tả race khi nhân viên nhập kết quả kiểm kho (điều chỉnh số lượng thực tế) đúng lúc có giao dịch nhập kho mới về khu vực đó vừa hoàn tất (hàng mới về ngay trong lúc đang chờ nhân viên submit kết quả đếm) — dùng version check để phát hiện số liệu tồn kho đã thay đổi kể từ lúc bắt đầu đếm, từ chối áp trực tiếp kết quả điều chỉnh mà yêu cầu nhân viên xác nhận lại phần chênh lệch trước khi ghi đè số liệu cuối cùng.
+- Mọi điều chỉnh số lượng từ kiểm kho phải ghi rõ số liệu trước khi kiểm, số liệu đếm thực tế, số liệu sau điều chỉnh, và danh sách các giao dịch xảy ra trong lúc kiểm đã được tính vào phần chênh lệch, để có thể truy vết khi phát hiện điều chỉnh sai sau này.

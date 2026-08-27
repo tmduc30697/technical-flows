@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống có xử lý t
 - Nếu callback báo thất bại đến sau khi hệ thống đã tạm ghi nhận đơn hàng ở trạng thái "đã thanh toán" (do quá lâu chưa nhận được callback nên có luồng dự phòng tự chuyển trạng thái theo polling), phải có cơ chế đảo ngược đúng: hủy đơn, hoàn tiền theo đúng tỷ giá đã khóa ban đầu (không phải tỷ giá hiện tại lúc hoàn tiền).
 - Do đối tác thanh toán quốc tế ở múi giờ khác, các mốc "theo ngày" trong đối soát (ví dụ báo cáo cuối ngày) phải được chuẩn hóa về 1 múi giờ tham chiếu duy nhất (ví dụ UTC) khi so khớp dữ liệu giữa 2 hệ thống, tránh lệch báo cáo do 1 bên tính theo giờ địa phương.
 - Có luồng đối soát riêng theo từng loại tiền tệ (không gộp chung), so khớp cả số tiền gốc (tiền khách trả) và số tiền quy đổi (tiền seller nhận), phát hiện các giao dịch có sai lệch tỷ giá bất thường để điều tra riêng.
+
+---
+
+## Job tính phí renewal tự động chạy trùng lúc khách tự đổi gói/hủy gói trên subscription SaaS
+
+**Repository:** `payment-saas-subscription-renewal-race`
+
+**Hệ thống:** Một SaaS B2B tính phí theo subscription hàng tháng, có job billing tự động chạy vào đúng ngày renewal của mỗi khách để charge thẻ và gia hạn, khách hàng cũng có thể tự đổi gói hoặc hủy gói qua UI vào bất kỳ thời điểm nào.
+
+**Vai trò của flow:** Flow phải xử lý đúng khi job billing tự động renewal và hành động thủ công của khách (đổi gói/hủy) chạm vào cùng 1 subscription gần như đồng thời, tránh charge sai gói hoặc charge sau khi khách đã hủy.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: job billing bắt đầu xử lý renewal cho subscription S lúc 00:00:05 (đọc gói hiện tại là "Pro"), đúng lúc khách bấm hủy subscription lúc 00:00:06, trước khi job kịp charge thẻ — yêu cầu job phải lock (hoặc dùng version check) trên record subscription trước khi charge, nếu phát hiện trạng thái đã đổi so với lúc đọc ban đầu (đã bị hủy) thì dừng ngay lập tức, không charge, không tạo invoice mới.
+- Mô tả race khi khách đổi gói (downgrade từ Pro sang Basic) đúng lúc job renewal đang giữa quá trình charge theo gói Pro (đã gọi tới cổng thanh toán, đang chờ phản hồi) — quy định rõ lần renewal này vẫn hoàn tất theo gói Pro với giá đã khóa tại thời điểm job bắt đầu xử lý, việc đổi gói mới chỉ có hiệu lực từ chu kỳ kế tiếp; không được hủy giữa chừng giao dịch đang gọi cổng thanh toán vì có thể phía cổng đã charge thành công dù hệ thống nội bộ chưa kịp ghi nhận.
+- Mô tả cụ thể: khách bấm hủy subscription ngay 5 giây sau khi job billing đã charge thành công chu kỳ mới — quy định rõ chính sách hoàn tiền theo tỷ lệ hoặc không hoàn cho phần thời gian còn lại của chu kỳ, và đảm bảo trạng thái subscription cuối cùng nhất quán, không rơi vào tình trạng vừa "đã charge chu kỳ mới" vừa "đã hủy ngay lập tức" gây mâu thuẫn khi hiển thị cho khách.
+- Job renewal chạy hàng loạt cho nhiều subscription trong cùng 1 batch theo ngày: đảm bảo mỗi subscription được xử lý độc lập với 1 lock/version check riêng, lỗi hoặc conflict xảy ra ở 1 subscription (do khách đang thao tác trùng lúc) không được làm chậm hoặc ảnh hưởng tới việc xử lý các subscription khác trong cùng batch.
+- Đảm bảo idempotency của job renewal: nếu job bị crash giữa chừng sau khi đã charge thành công ở cổng thanh toán nhưng chưa kịp cập nhật trạng thái subscription (ví dụ crash ngay sau khi gọi cổng thanh toán, trước khi ghi nhận kết quả), lần chạy lại job cho cùng subscription trong cùng chu kỳ không được charge lần 2 — phải kiểm tra trạng thái/idempotency key trước khi gọi cổng thanh toán lại.
+
+---
+
+## Nạp tiền và thanh toán từ ví điện tử chạm cùng 1 số dư gần như đồng thời
+
+**Repository:** `payment-ewallet-balance-concurrent-topup-payment`
+
+**Hệ thống:** Một ví điện tử cho phép người dùng nạp tiền từ ngân hàng liên kết vào ví và dùng số dư ví để thanh toán tại nhiều điểm chấp nhận thanh toán khác nhau (trong app, tại các merchant đối tác).
+
+**Vai trò của flow:** Flow phải đảm bảo số dư ví được cộng/trừ chính xác khi lệnh nạp tiền và lệnh thanh toán chạm vào cùng 1 số dư gần như đồng thời, không để số dư bị âm hoặc bị tính sai do 2 luồng cập nhật race nhau trên cùng 1 số dư.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: khách có số dư 100.000đ, cùng lúc có 1 lệnh nạp tiền 50.000đ đang được xử lý (callback từ ngân hàng vừa báo thành công) và 1 lệnh thanh toán 120.000đ tại merchant đang được xử lý — nếu 2 luồng đều đọc số dư 100.000đ trước khi tính toán theo kiểu đọc-tính-ghi không atomic, lệnh thanh toán có thể bị từ chối sai (100.000 < 120.000 dù thực tế sau khi nạp là 150.000 đủ trả) hoặc tệ hơn cả 2 ghi đè lẫn nhau gây sai số dư cuối cùng; yêu cầu dùng update nguyên tử có điều kiện, trừ tiền chỉ khi số dư đủ tại đúng thời điểm ghi, không dựa vào số dư đã đọc trước đó.
+- Quy định rõ hệ thống không cam kết thứ tự "nạp trước hay trừ trước" theo thời điểm người dùng bấm, mà theo thứ tự thực sự được xử lý atomic tại tầng lưu trữ — nếu lệnh thanh toán được xử lý trước khi tiền nạp kịp cộng vào và số dư tại thời điểm đó không đủ, phải từ chối thanh toán rõ ràng ngay, không giữ pending chờ nạp xong rồi tự động thử lại ngầm mà không thông báo cho khách.
+- Mô tả cụ thể: khách thực hiện 2 lệnh thanh toán khác nhau gần như đồng thời từ 2 thiết bị/session (ví dụ quét mã QR ở 2 merchant liên tiếp trong vài giây) trong khi số dư chỉ đủ cho 1 trong 2 lệnh — yêu cầu update nguyên tử trừ số dư có điều kiện đủ số dư để chỉ 1 giao dịch thành công, giao dịch còn lại bị từ chối ngay với lý do rõ ràng "số dư không đủ", không để cả 2 cùng trừ thành công gây số dư âm.
+- Callback nạp tiền từ ngân hàng đến trễ hoặc bị gửi trùng (do retry) đúng lúc ví đang có nhiều giao dịch trừ tiền khác diễn ra: xử lý idempotent theo mã giao dịch nạp tiền để không cộng tiền 2 lần khi callback đến trùng, đồng thời đảm bảo việc cộng tiền vẫn atomic với các giao dịch trừ tiền đang chạy song song, không để có khoảng hở giữa lúc callback bắt đầu xử lý và lúc số dư thực sự được cộng.
+- Có job định kỳ đối chiếu tổng số dư ví của từng khách với tổng lịch sử giao dịch (nạp trừ hoàn) để phát hiện lệch do lỗi race hiếm gặp lọt qua các cơ chế atomic, cảnh báo và tạm khóa giao dịch của tài khoản bị lệch để điều tra trước khi khách phát hiện và khiếu nại.

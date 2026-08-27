@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần giữ cache đ�
 - Xử lý cache stampede khi giá flash sale bắt đầu/kết thúc đúng giờ (hàng loạt cache cùng invalidate đồng thời tại thời điểm giờ chốt) — cần pre-warm cache trước thời điểm đổi giá vài giây để tránh dội tải.
 - Đảm bảo giá hiển thị cho user tại thời điểm checkout khớp với giá thực tế lúc submit đơn (double-check giá ở backend, không tin hoàn toàn giá đã cache hiển thị ở client).
 - Đo lường: tỉ lệ hiển thị sai giá/tồn kho (nếu có) trong log thực tế của các lần flash sale trước, dùng làm baseline để cải thiện chiến lược invalidation.
+
+---
+
+## Cache feed/trang cá nhân cho mạng xã hội
+
+**Repository:** `cache-invalidation-social-feed-profile`
+
+**Hệ thống:** Mạng xã hội cache feed trang chủ và trang cá nhân (profile) của user để giảm tải khi hiển thị bài viết, tránh phải chạy lại aggregation nặng mỗi lần load.
+
+**Vai trò của flow:** Invalidate đúng cache khi user đăng bài mới, xóa bài, sửa bài, đổi thông tin profile — đặc biệt phải fan-out invalidate/refresh cho cache feed của tất cả follower đang xem nội dung của user đó.
+
+**Yêu cầu cụ thể:**
+- Khi user đăng bài mới, cache feed của chính họ (profile page) phải invalidate ngay, nhưng cache feed của hàng chục nghìn follower thì không thể invalidate đồng bộ tức thời — cần chiến lược phân biệt giữa fan-out-on-write (đẩy trước) cho user ít follower và fan-out-on-read (tính khi đọc) cho celebrity account có follower cực lớn, tránh nghẽn khi 1 bài đăng làm invalidate hàng triệu cache feed cùng lúc.
+- Khi user xóa 1 bài viết, phải đảm bảo bài đó biến mất khỏi cache feed của follower trong thời gian hợp lý dù dùng fan-out-on-read hay pull — không được để bài đã xóa vẫn hiển thị dai dẳng do cache feed của follower ít khi active nên hiếm khi được refresh.
+- Race condition: user vừa đăng bài mới vừa sửa bài cũ gần như đồng thời — invalidation event có thể tới cache theo thứ tự khác thứ tự thực tế (do khác hàng đợi/khác node xử lý), cần cơ chế đảm bảo thứ tự (version/timestamp) để cache feed không áp dụng nhầm invalidate cũ đè lên update mới.
+- Khi user đổi avatar/tên hiển thị, các bài post cũ của họ đang nằm rải rác trong cache feed của follower khác vẫn hiển thị thông tin cũ (do cache feed thường lưu kèm snapshot info tác giả) — quyết định rõ có chấp nhận độ trễ hiển thị (denormalized data lệch tạm thời) hay bắt buộc phải invalidate toàn bộ cache liên quan, đánh đổi chi phí fan-out rất lớn.
+- Đo lường: độ trễ trung bình và p99 từ lúc user đăng/xóa bài tới lúc feed của follower phản ánh đúng, và tỉ lệ follower vẫn thấy nội dung cũ quá X phút sau invalidation event, dùng để đánh giá hiệu quả chiến lược fan-out đang chọn.
+
+---
+
+## Cache nhiều tầng cho CMS/blog
+
+**Repository:** `cache-invalidation-cms-multilayer`
+
+**Hệ thống:** Hệ thống CMS/blog phục vụ bài viết qua nhiều tầng cache chồng lên nhau: CDN edge cache (gần user), cache tầng ứng dụng (application/object cache), và cache kết quả query DB (query cache) — mỗi tầng có TTL và cơ chế invalidate riêng.
+
+**Vai trò của flow:** Đảm bảo khi 1 bài viết được sửa/xóa/publish, việc invalidate phải lan đúng và đủ qua toàn bộ các tầng cache, không chỉ dừng ở tầng gần nhất (application cache) mà bỏ sót CDN edge hoặc query cache khiến người đọc vẫn thấy nội dung cũ dù tầng app đã đúng.
+
+**Yêu cầu cụ thể:**
+- Khi biên tập viên sửa nội dung bài viết và publish lại, invalidation phải được gửi tới cả 3 tầng theo đúng thứ tự phụ thuộc (query cache trước, application cache sau, rồi purge CDN edge) — nếu purge CDN trước mà tầng dưới chưa cập nhật, request tiếp theo tới edge sẽ pull lại đúng nội dung cũ từ application cache và cache lại nó ở edge, coi như invalidate CDN vô nghĩa.
+- Purge CDN edge cache thường không đồng bộ ngay lập tức trên toàn bộ điểm PoP (point of presence) toàn cầu — phải chấp nhận và công bố rõ "khoảng lan truyền" (propagation window) thực tế, đồng thời có cơ chế xác nhận purge đã tới đủ số PoP quan trọng trước khi coi invalidation hoàn tất.
+- Với bài viết bị xóa hẳn (không chỉ sửa), phải đảm bảo tầng query cache (thường cache theo query như "danh sách bài mới nhất") cũng được invalidate, không chỉ cache theo ID bài viết đơn lẻ — nếu bỏ sót, bài đã xóa vẫn xuất hiện trong danh sách trang chủ dù trang chi tiết đã trả 404 đúng.
+- Xử lý trường hợp một tầng cache invalidate thất bại (ví dụ API purge CDN timeout hoặc trả lỗi) — phải có retry với theo dõi trạng thái, và log rõ tầng nào invalidate thành công/thất bại để vận hành biết còn tầng nào đang phục vụ nội dung cũ, tránh tình trạng "tưởng đã invalidate hết" nhưng thực ra một tầng vẫn stale.
+- Đo lường: với mỗi lần publish/sửa bài, track được "end-to-end staleness" — thời gian từ lúc publish tới lúc cả 3 tầng đều phản ánh đúng nội dung mới, phân theo từng tầng để biết tầng nào đang là nút thắt cổ chai của độ trễ invalidate.

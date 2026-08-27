@@ -53,3 +53,37 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần đồng thuận
 - Phải có cơ chế phát hiện và log rõ "split-brain" giả định (hai leader cùng tồn tại do term cũ) và tự động vô hiệu hóa leader cũ ngay khi nó nhận ra term mới hơn.
 - Idempotency: mỗi giao dịch có transaction ID duy nhất; nếu client retry do timeout, hệ thống không apply hai lần dù request đã thực sự thành công ở lần gửi trước.
 - Đo lường/observability: expose được commit latency p50/p99, số lần leader election trong 24h, và alert khi cluster mất quorum quá X giây.
+
+---
+
+## Cụm game server real-time đồng thuận trạng thái trận đấu
+
+**Repository:** `consensus-realtime-game-server-cluster`
+
+**Hệ thống:** Cụm nhiều node game server xử lý các trận đấu real-time (multiplayer), cần đồng thuận về trạng thái trận đấu dùng chung khi có tranh chấp thời gian thực (ví dụ ai bắn trúng trước, ai chiếm điểm trước) và phải chịu được node chết giữa trận mà không làm hỏng trận đấu đang diễn ra.
+
+**Vai trò của flow:** Consensus giúp các node đồng thuận về một trình tự sự kiện (event ordering) duy nhất cho trạng thái trận đấu dùng chung, đảm bảo mọi client thấy kết quả tranh chấp nhất quán, và khi node đang giữ trạng thái trận (authoritative node) chết giữa trận, một node khác phải tiếp quản mà không làm mất tiến trình hoặc gây kết quả sai lệch cho người chơi.
+
+**Yêu cầu cụ thể:**
+- Khi 2 sự kiện tranh chấp thời gian thực xảy ra gần như đồng thời (ví dụ 2 người chơi cùng bắn trúng 1 mục tiêu trong khoảng vài mili-giây), cụm phải có cơ chế xác định thứ tự duy nhất (dựa trên log được replicate qua majority, không dựa vào timestamp riêng của từng client vì client có độ trễ mạng khác nhau) để mọi node và mọi người chơi thấy cùng một kết quả tranh chấp, tránh tình trạng mỗi client "thấy" một người thắng khác nhau.
+- Đây là hệ thống cực nhạy về độ trễ (mọi quyết định đồng thuận đều cộng thêm latency vào trải nghiệm chơi) — phải cân nhắc rõ trade-off giữa việc chờ đủ majority xác nhận trước khi áp dụng trạng thái (an toàn nhưng thêm độ trễ cảm nhận được) và áp dụng lạc quan trước rồi rollback nếu bị đảo ngược sau (nhanh nhưng có rủi ro hiển thị sai tạm thời cho người chơi).
+- Khi node đang giữ vai trò authoritative cho một trận đấu chết đột ngột giữa trận, một node khác phải tiếp quản dựa trên log đã replicate gần nhất, nhưng cần xử lý rõ khoảng "gap" các sự kiện input từ người chơi gửi ngay trước/trong lúc chuyển giao — không được để mất hẳn input đó (người chơi cảm giác thao tác bị "nuốt") cũng không được áp dụng input đó hai lần trên node mới.
+- Trong lúc một phần cụm bị network partition (một nhóm node mất kết nối với phần còn lại), các trận đấu đang chạy trên node ở phía minority phải được xử lý rõ ràng: hoặc chuyển trận sang node ở phía majority (chấp nhận gián đoạn ngắn, thông báo người chơi "đang kết nối lại") hoặc tạm dừng trận, tuyệt đối không để 2 phía cùng tiếp tục xử lý độc lập cùng một trận rồi tạo ra 2 kết quả khác nhau.
+- Đo lường: latency thêm vào do bước đồng thuận cho các sự kiện tranh chấp (so với xử lý không đồng thuận), tần suất phải rollback trạng thái lạc quan do bị đảo ngược sau đồng thuận thật, và thời gian trung bình để một trận đấu phục hồi hoàn toàn sau khi node giữ trạng thái của nó bị chết.
+
+---
+
+## Message broker tự xây đồng thuận thứ tự message
+
+**Repository:** `consensus-custom-message-broker-ordering`
+
+**Hệ thống:** Một message broker tự xây (không dùng lại broker có sẵn) gồm nhiều broker node, phục vụ publish/subscribe cho nhiều consumer, cần đảm bảo consumer nhận message theo đúng thứ tự đã publish dù cụm broker có node chết hoặc leader broker bị thay đổi.
+
+**Vai trò của flow:** Consensus giữa các broker node quyết định thứ tự chính thức (canonical order) của message trong một topic/partition, đảm bảo khi leader broker hiện tại chết và một broker khác lên thay, thứ tự message consumer nhận vẫn nhất quán và không bị mất/lặp message đã được xác nhận.
+
+**Yêu cầu cụ thể:**
+- Mọi message publish vào một topic/partition phải được gán thứ tự (offset) chỉ sau khi broker leader hiện tại đã replicate thành công tới majority broker node khác trong nhóm phụ trách partition đó — message chỉ được coi là "đã publish thành công" (ack cho producer) sau bước này, không phải ngay khi leader nhận được.
+- Khi broker leader phụ trách một partition chết đột ngột, broker mới lên thay phải xác định chính xác offset cuối cùng đã thực sự commit (replicate đủ majority) trước khi cho phép publish tiếp — nếu chọn nhầm một offset dựa trên log chưa commit đầy đủ của leader cũ, có thể làm mất message đã ack cho producer hoặc gây phân nhánh thứ tự giữa các replica.
+- Trong lúc leader mới đang được bầu (giai đoạn gián đoạn ngắn), phải quyết định rõ hành vi cho producer đang cố publish (từ chối rõ ràng để producer tự retry, hay buffer tạm ở phía client) và cho consumer đang đọc (tạm dừng nhận message mới ở đúng offset cuối cùng đã đọc, không được đọc nhảy cóc hoặc đọc trùng khi kết nối lại broker mới).
+- Consumer group có thể đang đọc dở một partition đúng lúc leader chuyển giao — cần đảm bảo offset commit của consumer (điểm đã đọc tới đâu) được lưu độc lập với trạng thái broker leader, để khi consumer reconnect vào broker mới, nó tiếp tục đọc đúng từ vị trí đã dừng, không bị mất message (đọc thiếu) hoặc nhận lại message đã xử lý (đọc trùng) một cách không kiểm soát được.
+- Đo lường: thời gian gián đoạn publish/consume trong mỗi lần chuyển leader (failover time), tần suất phải chuyển leader trong thực tế vận hành, và có test định kỳ mô phỏng chết leader giữa lúc đang publish tải cao để xác nhận không có message nào bị mất hoặc đảo thứ tự ngoài dự kiến.

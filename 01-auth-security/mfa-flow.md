@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều loại yếu tố xác thực th�
 - Khi điểm rủi ro cao bất thường (ví dụ đăng nhập từ hai quốc gia cách nhau vài phút), phải chặn và yêu cầu xác minh bổ sung mạnh hơn (ví dụ liên hệ hỗ trợ) thay vì chỉ hỏi lại OTP thông thường.
 - Toàn bộ quyết định yêu cầu/miễn MFA của mỗi lần đăng nhập phải được log lại kèm lý do (rủi ro thấp/cao, tín hiệu nào kích hoạt) để phục vụ audit compliance.
 - Nếu dịch vụ tính điểm rủi ro gặp lỗi hoặc timeout, hệ thống phải fail-safe về yêu cầu MFA đầy đủ, không được mặc định bỏ qua MFA vì lỗi hạ tầng.
+
+---
+
+## SaaS B2B cho phép admin công ty tự cấu hình chính sách MFA bắt buộc theo tổ chức
+
+**Repository:** `mfa-b2b-saas-org-policy`
+
+**Hệ thống:** Một SaaS quản lý dự án/CRM bán cho nhiều công ty khách hàng (multi-tenant), mỗi công ty có admin riêng quản lý chính sách bảo mật cho nhân viên của họ.
+
+**Vai trò của flow:** Cho phép org admin tự cấu hình chính sách MFA bắt buộc (bật/tắt, phương thức được phép, áp dụng cho nhóm role nào) riêng cho tổ chức của họ, độc lập với các tenant khác trên cùng nền tảng.
+
+**Yêu cầu cụ thể:**
+- Khi admin bật chính sách bắt buộc MFA cho toàn tổ chức, những user đang có session hoạt động nhưng chưa enroll MFA không thể bị ép logout tức thì vì sẽ gây gián đoạn hàng loạt, nhưng cũng không thể được dùng vô thời hạn mà không enroll — cần một grace period có giới hạn rõ ràng kèm nhắc nhở tăng dần.
+- Chính sách MFA có thể cấu hình khác nhau theo role trong cùng tổ chức (ví dụ chỉ bắt buộc cho admin/owner, không bắt buộc cho viewer) — khi một user được đổi role giữa chừng (từ viewer lên admin), chính sách MFA mới phải áp dụng ngay, không chờ tới lần đăng nhập kế tiếp mới phát hiện ra là chưa đủ điều kiện.
+- Vì một tài khoản email có thể tham gia nhiều tổ chức trên cùng nền tảng với chính sách MFA khác nhau, cần định nghĩa rõ MFA áp dụng theo ngữ cảnh org nào trong phiên làm việc, tránh tình huống user né được yêu cầu MFA của tổ chức chặt hơn bằng cách chuyển sang truy cập qua context của tổ chức khác lỏng hơn.
+- Khi admin hạ cấp hoặc tắt chính sách MFA bắt buộc (ví dụ do đổi nhà cung cấp SSO), đây là hành động làm giảm bảo mật toàn tổ chức nên cần yêu cầu chính admin đó xác thực MFA để thực hiện thay đổi, đồng thời ghi log và thông báo cho các admin khác trong tổ chức biết.
+- Khi tổ chức bắt buộc một phương thức MFA cụ thể chặt hơn (ví dụ chỉ cho WebAuthn, cấm SMS OTP), những user đã enroll SMS theo chính sách cũ phải được yêu cầu enroll lại phương thức mới trong một mốc thời gian rõ ràng, không bị mất quyền truy cập đột ngột ngay khi chính sách vừa thay đổi.
+
+---
+
+## Mạng xã hội bảo vệ tài khoản creator/influencer lớn khỏi chiếm quyền và tấn công MFA fatigue
+
+**Repository:** `mfa-social-creator-account-takeover-fatigue`
+
+**Hệ thống:** Một nền tảng mạng xã hội cho phép đăng nội dung công khai, tài khoản có lượng follower lớn (creator/influencer) là mục tiêu thường xuyên bị nhắm tới để chiếm quyền, thường nhằm lừa đảo follower hoặc đòi tiền chuộc.
+
+**Vai trò của flow:** Tự động áp dụng chính sách MFA mạnh hơn cho tài khoản có ảnh hưởng lớn, đồng thời phát hiện và ngăn chặn tấn công "MFA fatigue" — kẻ tấn công spam liên tục yêu cầu push notification approve nhằm khiến chủ tài khoản bấm nhầm chấp nhận.
+
+**Yêu cầu cụ thể:**
+- Hệ thống phải tự động nâng cấp yêu cầu MFA (ví dụ buộc chuyển từ SMS hoặc không có MFA sang WebAuthn/TOTP) khi tài khoản vượt một ngưỡng follower hoặc mức độ ảnh hưởng nhất định, kèm luồng thông báo và hỗ trợ enroll để không đột ngột khóa quyền truy cập của creator đang hoạt động bình thường.
+- Phải giới hạn số lượng push notification MFA gửi liên tiếp trong một khoảng thời gian ngắn, tự động khóa các yêu cầu mới sau một số lần nhất định, để chặn kịch bản kẻ tấn công spam hàng chục request đăng nhập liên tục nhằm khiến chủ tài khoản mệt mỏi và bấm approve nhầm.
+- Giao diện push notification approve phải hiển thị đủ ngữ cảnh (vị trí, thiết bị, thời gian request) và yêu cầu một hành động xác nhận có chủ đích, ví dụ nhập số hiển thị trên màn hình đăng nhập vào app push (number matching), thay vì chỉ một nút "Approve" đơn giản rất dễ bấm nhầm khi đang bị dồn dập.
+- Khi phát hiện một chuỗi request MFA bị từ chối liên tiếp trong thời gian ngắn — dấu hiệu rõ ràng của tấn công thay vì nhầm lẫn ngẫu nhiên — hệ thống phải tự động tạm khóa đăng nhập từ nguồn phát sinh request và cảnh báo chủ tài khoản qua một kênh độc lập, không chờ họ tự nhận ra đang bị tấn công.
+- Với tài khoản creator lớn, cần một phương thức phục hồi khẩn cấp riêng (đường dây hỗ trợ ưu tiên hoặc xác minh danh tính tăng cường) khi họ thực sự mất yếu tố MFA, cân bằng giữa tốc độ khôi phục — vì mất quyền truy cập lâu gây thiệt hại uy tín/doanh thu — và rủi ro kẻ tấn công lợi dụng chính kênh phục hồi ưu tiên này để chiếm tài khoản.

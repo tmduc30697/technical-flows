@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần bảo vệ hệ
 - Với giao dịch đọc (xem số dư), có thể fallback về số dư cache gần nhất khi breaker mở, nhưng phải hiển thị rõ cho user đây là "số dư tại thời điểm gần nhất" không phải real-time.
 - Khi breaker mở kéo dài (core banking down lâu), phải có quy trình escalate tới team vận hành ngay (alert khẩn) vì đây ảnh hưởng trực tiếp tới khả năng giao dịch của khách hàng.
 - Ghi log đầy đủ mọi lần retry/circuit breaker chuyển trạng thái liên quan tới giao dịch tiền, phục vụ audit và đối soát khi có khiếu nại từ khách hàng.
+
+---
+
+## Tạo vận đơn qua API đối tác vận chuyển (shipping carrier)
+
+**Repository:** `circuit-breaker-shipping-carrier-api`
+
+**Hệ thống:** Hệ thống logistics/e-commerce gọi API của nhiều đối tác vận chuyển (carrier) bên ngoài để tạo vận đơn, tra cứu trạng thái giao hàng, mỗi đối tác có SLA và độ ổn định khác nhau, đặc biệt kém vào giờ cao điểm.
+
+**Vai trò của flow:** Circuit breaker riêng biệt cho từng đối tác vận chuyển (không dùng chung một breaker cho tất cả) để lỗi của một carrier không ảnh hưởng luồng gọi carrier khác, kèm fallback tự động chuyển đơn sang đối tác thay thế khi carrier chính đang gặp sự cố.
+
+**Yêu cầu cụ thể:**
+- Mỗi đối tác vận chuyển phải có circuit breaker độc lập với ngưỡng riêng (có thể khác nhau theo lịch sử SLA từng đối tác) — tuyệt đối không dùng chung một breaker toàn cục, vì như vậy một carrier bị lỗi nặng sẽ khóa luôn cả các carrier khác đang hoạt động bình thường.
+- Khi breaker của carrier A mở, hệ thống phải tự động fallback sang carrier B/C theo thứ tự ưu tiên đã cấu hình (dựa trên vùng phục vụ, chi phí, hoặc SLA hiện tại), nhưng phải tránh trường hợp đơn hàng đã thực sự được tạo phía carrier A (do timeout khi đang chờ phản hồi, không phải lỗi thực sự) rồi lại bị tạo trùng lần nữa ở carrier B.
+- Với API tạo vận đơn (ghi, có tác dụng phụ thật ngoài đời — carrier đã cấp mã vận đơn và lên lịch lấy hàng), retry chỉ được thực hiện sau khi xác minh qua API tra cứu trạng thái của chính carrier đó rằng vận đơn thực sự chưa được tạo, không retry mù dựa trên timeout đơn thuần.
+- Giờ cao điểm là lúc carrier dễ chậm/lỗi nhất nhưng cũng là lúc lượng đơn cần xử lý cao nhất — backoff giữa các lần retry phải có jitter để tránh hàng loạt request retry cùng dồn vào carrier đúng lúc carrier đang phục hồi, càng làm carrier chậm phục hồi hơn.
+- Đo lường riêng theo từng carrier: tỉ lệ lỗi, thời gian breaker mở trong ngày, tỉ lệ đơn phải fallback sang carrier dự phòng, và chi phí phát sinh do phải chuyển sang carrier dự phòng có giá cao hơn — dùng để đánh giá định kỳ có nên thay đổi thứ tự ưu tiên carrier hay không.
+
+---
+
+## Tính route/ETA qua API bản đồ bên thứ ba cho ride-hailing
+
+**Repository:** `circuit-breaker-ridehailing-maps-routing`
+
+**Hệ thống:** App ride-hailing gọi API bản đồ/định tuyến của bên thứ ba để tính route và ETA cho tài xế trong lúc đang chở khách (chuyến đi đang chạy thời gian thực).
+
+**Vai trò của flow:** Circuit breaker và retry/fallback giúp app tài xế không bị treo hoặc mất định hướng giữa chuyến đi khi API bản đồ bên ngoài chậm hoặc lỗi, vì đây là luồng ảnh hưởng trực tiếp tới trải nghiệm và an toàn vận hành trong lúc chuyến đi đang diễn ra.
+
+**Yêu cầu cụ thể:**
+- Khi API bản đồ chậm hoặc timeout giữa lúc chuyến đi đang chạy, app tài xế không được để màn hình chỉ đường bị treo hoặc trắng — phải fallback ngay về route/hướng dẫn gần nhất đã tính thành công trước đó (cached route) trong lúc chờ, hoặc chuyển sang provider bản đồ dự phòng, để tài xế luôn có chỉ dẫn khả dụng.
+- Circuit breaker cho API bản đồ phải cấu hình ngưỡng nhạy với latency (không chỉ tỉ lệ lỗi cứng) vì với luồng real-time, một API trả đúng nhưng quá chậm (ví dụ vượt vài giây) cũng coi như vô dụng cho việc chỉ đường đang di chuyển — cần treat timeout mềm này như một dạng lỗi để tính vào ngưỡng mở breaker.
+- Retry phải giới hạn số lần rất chặt (không quá 1-2 lần) và backoff phải cực ngắn cho luồng ETA/route trong chuyến đi đang chạy, vì tài xế đang di chuyển thực tế — retry kiểu chờ lâu (backoff dài như luồng batch khác) làm dữ liệu route trả về bị lỗi thời so với vị trí hiện tại của xe.
+- Khi breaker mở kéo dài (provider bản đồ chính down), phải tự động chuyển toàn bộ app tài xế đang hoạt động sang provider dự phòng theo cơ chế graceful switch (không làm gián đoạn phiên đang chạy, không bắt tài xế phải khởi động lại app), đồng thời thông báo rõ tình trạng "đang dùng nguồn bản đồ dự phòng" nếu chất lượng route có thể khác biệt.
+- Đo lường: latency thực tế của API bản đồ theo từng khu vực địa lý (một số vùng có thể có route/dữ liệu kém hơn ở provider chính), tỉ lệ chuyến đi phải fallback sang provider dự phòng, và tương quan giữa thời gian breaker mở với các phản hồi tiêu cực từ tài xế (báo cáo bị lạc đường, chỉ dẫn sai) để đánh giá tác động thực tế.

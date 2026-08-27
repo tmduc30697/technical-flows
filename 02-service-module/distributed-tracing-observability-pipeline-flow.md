@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (SaaS 
 - Khi một bước bị lỗi và job được retry tự động sau một khoảng thời gian (backoff), span của lần retry phải ghi rõ thời gian chờ (đã cố ý delay) tách biệt với thời gian xử lý thật, để không tính sai vào "thời gian xử lý trung bình".
 - Cung cấp khả năng tổng hợp theo từng bước trên toàn hệ thống (không chỉ theo một video) để trả lời "bước transcode 1080p đang chậm dần theo thời gian, có phải do tài nguyên worker đang thiếu".
 - Xử lý trường hợp một video bị người dùng xóa giữa lúc đang xử lý — các span phát sinh sau đó (ví dụ job vẫn đang chạy trong queue) phải được đóng lại rõ ràng với trạng thái "cancelled", không để trace treo ở trạng thái "đang xử lý" mãi mãi trên dashboard giám sát.
+
+---
+
+## Truy vết một đơn hàng e-commerce qua giỏ hàng, tồn kho, thanh toán và xác nhận
+
+**Repository:** `distributed-tracing-ecommerce-order-flow`
+
+**Hệ thống:** Một sàn e-commerce có luồng đặt hàng đi qua bốn service tách biệt: `cart-service` → `inventory-service` (kiểm tra và giữ tồn kho) → `payment-service` (gọi cổng thanh toán bên ngoài) → `order-confirmation-service`, mỗi service có tài nguyên và tốc độ scale khác nhau.
+
+**Vai trò của flow:** Khi checkout bị chậm vào giờ cao điểm, tracing phải chỉ ra chính xác bước nào đang là nút thắt (tồn kho đang bị lock tranh chấp, hay cổng thanh toán bên ngoài đang chậm, hay chỉ đơn giản là hàng đợi nội bộ đang nghẽn) để đội vận hành không phải đoán mò giữa nhiều nguyên nhân khả dĩ.
+
+**Yêu cầu cụ thể:**
+- Trace của một đơn hàng phải giữ nguyên `trace_id` xuyên suốt bốn bước dù chúng chạy trên các service độc lập với vòng đời request khác nhau (một số đồng bộ, một số phải chờ callback bất đồng bộ từ cổng thanh toán), để dựng lại được toàn bộ hành trình của một đơn hàng cụ thể khi khách hàng báo lỗi.
+- Bước kiểm tra tồn kho thường liên quan tới việc chờ lock (nhiều đơn hàng cùng tranh chấp một sản phẩm hot), span của bước này phải tách riêng thời gian chờ lock khỏi thời gian xử lý logic thật, để phân biệt được "chậm vì tranh chấp tồn kho" với "chậm vì code xử lý nặng".
+- Bước gọi cổng thanh toán bên ngoài phải được đánh dấu rõ là external dependency với SLA riêng, để khi tổng hợp thống kê "checkout chậm ở bước nào" vào giờ cao điểm, đội vận hành không nhầm lẫn giữa độ trễ do chính hệ thống gây ra và độ trễ nằm ngoài tầm kiểm soát của cổng thanh toán đối tác.
+- Thiết kế dashboard tổng hợp theo từng bước trên toàn bộ traffic (không chỉ theo từng đơn hàng riêng lẻ) để trả lời câu hỏi "giờ cao điểm hôm nay chậm hơn hôm qua, chậm chủ yếu ở bước nào" — cho phép so sánh phân phối độ trễ (p50/p95/p99) từng bước theo thời gian thực.
+- Xử lý trường hợp một đơn hàng bị timeout ở bước thanh toán nhưng cổng thanh toán thực ra đã xử lý thành công phía họ và gửi callback trễ — trace phải ghi lại đủ để đối chiếu, tránh tình huống hệ thống báo "đơn hàng thất bại" trong khi thực tế tiền đã bị trừ, gây khiếu nại khó điều tra nếu thiếu dữ liệu trace đầy đủ.
+
+---
+
+## Trace lời gọi từ mobile app xuyên qua backend tới các dịch vụ bên thứ ba
+
+**Repository:** `distributed-tracing-mobile-backend-thirdparty`
+
+**Hệ thống:** Một ứng dụng mobile gọi vào backend, và với một số tính năng, backend phải gọi tiếp ra các dịch vụ bên thứ ba (bản đồ/định vị, gửi SMS xác thực, đẩy push notification) trước khi trả kết quả về cho app.
+
+**Vai trò của flow:** Tracing phải phân biệt rõ ràng thời gian chờ các dịch vụ bên thứ ba (ngoài tầm kiểm soát của đội kỹ thuật) với thời gian backend tự xử lý nội bộ, để khi app "cảm giác chậm", đội vận hành biết nên gây sức ép với đối tác thứ ba hay tối ưu code nội bộ.
+
+**Yêu cầu cụ thể:**
+- Mỗi lời gọi ra dịch vụ bên thứ ba phải được bọc trong một span riêng, gắn tag rõ ràng là external call kèm tên nhà cung cấp, tách biệt hoàn toàn khỏi span xử lý logic nội bộ, để khi tổng hợp latency trung bình của một API, có thể bóc tách được phần "chờ bên ngoài" ra khỏi phần "backend tự xử lý".
+- Vì kết nối từ mobile app tới backend qua mạng di động không ổn định, phải phân biệt được độ trễ do chính mạng di động của client (trước khi request tới được backend) với độ trễ phát sinh trong nội bộ hệ thống backend — tránh gộp chung khiến số liệu latency nội bộ bị nhiễu bởi yếu tố phía client hoàn toàn không kiểm soát được.
+- Xử lý trường hợp một dịch vụ bên thứ ba (ví dụ SMS) timeout hoặc trả lỗi và backend có cơ chế retry — mỗi lần retry phải tạo span riêng biệt kèm số thứ tự lần thử, để phân biệt được "một cuộc gọi chậm" với "ba lần gọi cộng dồn lại thành chậm", vốn cần xử lý khác nhau về mặt vận hành.
+- Thiết kế cảnh báo riêng theo từng nhà cung cấp bên thứ ba (SLA latency/tỷ lệ lỗi riêng cho bản đồ, SMS, push notification) để phát hiện khi một đối tác cụ thể đang suy giảm chất lượng dịch vụ, thay vì chỉ có một cảnh báo chung chung "API chậm" gộp tất cả nguyên nhân lại.
+- Đảm bảo dữ liệu trace không vô tình ghi lại nội dung nhạy cảm được gửi qua các dịch vụ bên thứ ba (ví dụ nội dung tin nhắn SMS chứa mã OTP, tọa độ vị trí chính xác của người dùng) vào tag/log của span — chỉ ghi metadata cần thiết cho việc debug hiệu năng (thời gian, trạng thái, mã lỗi), không ghi nội dung payload thật.

@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần đảm bảo d�
 - Có sự phối hợp rõ ràng giữa recovery cục bộ (WAL) và recovery ở tầng cluster (Raft log) — không được để 2 cơ chế mâu thuẫn nhau về thứ tự áp dụng thay đổi.
 - Đo lường: so sánh thời gian một node phục hồi bằng WAL cục bộ (nhanh) versus phải rebuild toàn bộ từ replica qua network (chậm hơn nhiều), để quyết định ngưỡng khi nào nên dùng cách nào.
 - Test kịch bản mất điện toàn bộ datacenter khiến nhiều node cùng crash đồng thời — đảm bảo mỗi node phục hồi độc lập đúng trạng thái của nó trước khi cluster đồng thuận lại state chung.
+
+---
+
+## WAL cho message queue broker tự xây đảm bảo message không mất
+
+**Repository:** `wal-message-queue-broker`
+
+**Hệ thống:** Nhóm tự xây một message queue broker đơn giản để producer gửi message, consumer đọc và ack, cần đảm bảo message đã ack cho producer (nhận thành công) không bị mất kể cả khi broker crash trước khi consumer kịp đọc.
+
+**Vai trò của flow:** WAL ghi message xuống đĩa ngay khi broker nhận được, trước khi trả ack "đã nhận" cho producer, và dùng WAL để phục hồi hàng đợi (thứ tự, message chưa được consumer đọc/ack) sau khi broker crash và restart.
+
+**Yêu cầu cụ thể:**
+- Broker chỉ được trả ack "đã nhận" cho producer sau khi message được ghi (fsync) vào WAL thành công; nếu broker crash giữa lúc ghi WAL (trước fsync) thì phải không trả ack — producer coi như gửi thất bại và tự retry, tránh tình huống producer tưởng đã gửi thành công nhưng message chưa từng được ghi bền vững.
+- Sau crash, khi broker khởi động lại phải replay WAL để tái tạo đúng thứ tự hàng đợi và biết chính xác message nào consumer đã ack trước lúc crash (không đưa lại message đã ack cho consumer đọc lần nữa) và message nào chưa ack (phải đưa lại để consumer xử lý tiếp) — cần ghi rõ trạng thái ack vào WAL, không chỉ ghi lúc nhận message.
+- Xử lý được trường hợp consumer đã đọc message, đang xử lý dở thì broker crash trước khi consumer kịp gửi ack — sau khi broker phục hồi từ WAL, message đó phải coi là "chưa ack" và được giao lại cho consumer (có thể là consumer khác), đòi hỏi việc xử lý message ở phía consumer phải idempotent để chịu được đọc trùng.
+- Nhiều producer ghi đồng thời vào broker tạo áp lực ghi WAL liên tục — cần checkpoint định kỳ để cắt bớt phần WAL chứa toàn message đã được mọi consumer liên quan ack xong, tránh WAL phình vô hạn khiến thời gian replay khi crash ngày càng dài.
+- Đo lường thời gian từ lúc broker crash tới lúc sẵn sàng nhận/giao message lại bình thường (recovery time), tương quan với kích thước WAL và số lượng message chưa checkpoint, để xác định ngưỡng cảnh báo vận hành trước khi recovery time vượt SLA cho phép.
+
+---
+
+## WAL backup cho hệ thống xử lý đơn hàng dùng in-memory cache tăng tốc
+
+**Repository:** `wal-order-processing-in-memory-cache`
+
+**Hệ thống:** Hệ thống xử lý đơn hàng giữ trạng thái tạm (đơn đang xử lý, bước hiện tại) trong in-memory cache để tăng tốc độ đọc/ghi thay vì query DB liên tục, nhưng in-memory cache có thể mất sạch khi service restart hoặc crash.
+
+**Vai trò của flow:** WAL ghi mọi thay đổi trạng thái đơn hàng ra đĩa trước hoặc song song với việc cập nhật in-memory cache, để khi cache mất do crash/restart, có thể replay WAL tái tạo lại đúng trạng thái các đơn đang xử lý thay vì mất dấu.
+
+**Yêu cầu cụ thể:**
+- Thứ tự bắt buộc: ghi thay đổi vào WAL trước, cập nhật in-memory cache sau — nếu làm ngược lại (cập nhật cache trước, ghi WAL sau) thì một crash xảy ra đúng khoảng giữa hai bước sẽ khiến trạng thái "tưởng đã xử lý" trong cache biến mất mà không có bản ghi nào trong WAL để phục hồi.
+- Khi service restart, phải replay WAL để rebuild lại toàn bộ in-memory cache về đúng trạng thái trước lúc crash trước khi bắt đầu nhận request xử lý đơn mới; nếu chấp nhận request trong lúc cache còn rỗng/chưa replay xong sẽ gây đọc sai trạng thái đơn hàng (ví dụ tưởng đơn chưa xử lý bước nào trong khi thực tế đã xử lý gần xong).
+- Nhiều đơn hàng đang ở các bước khác nhau tại thời điểm crash (một số vừa ghi WAL xong nhưng cache chưa kịp cập nhật, một số đã cập nhật cache nhưng chưa tới đợt flush/checkpoint) — replay phải xử lý đúng từng đơn theo entry cuối cùng ghi nhận cho đơn đó trong WAL, không áp dụng nhầm thứ tự giữa các đơn khác nhau.
+- Tần suất thay đổi trạng thái đơn hàng có thể rất cao (nhiều bước nhỏ mỗi đơn) khiến ghi WAL đồng bộ mỗi thay đổi ảnh hưởng tới lợi ích tốc độ mà in-memory cache mang lại — cần cân nhắc rõ giữa ghi WAL đồng bộ từng bước (an toàn tuyệt đối, chậm hơn) và batch/ghi định kỳ (nhanh hơn, chấp nhận mất một khoảng nhỏ thay đổi gần nhất nếu crash), và phải nêu rõ RPO chấp nhận được cho hệ thống đơn hàng này.
+- Có cơ chế phát hiện WAL và in-memory cache bị lệch nhau (ví dụ do bug ghi cache thất bại âm thầm dù WAL đã ghi đúng) thông qua kiểm tra định kỳ hoặc checksum trạng thái tổng hợp, tránh để hệ thống chạy lâu dài với cache sai lệch mà không ai phát hiện cho tới khi có sự cố lớn mới lộ ra.

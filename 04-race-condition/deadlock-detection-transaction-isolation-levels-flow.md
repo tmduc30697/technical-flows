@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống web khác nhau
 - Chọn isolation level `READ COMMITTED` cho transaction cộng điểm để có UX nhanh, nhưng job tính rank cần đảm bảo tính nhất quán tương đối (không bắt buộc real-time chính xác tuyệt đối) — giải thích trade-off này bằng ví dụ cụ thể.
 - Thiết kế cơ chế "lock timeout" ngắn (ví dụ 1 giây) cho transaction cộng điểm, để nếu job rank đang giữ lock lâu, user vẫn nhận được phản hồi (có thể là "điểm sẽ cập nhật sau ít giây") thay vì trải nghiệm bị treo.
 - Đo và log tỷ lệ deadlock/lock-timeout theo giờ cao điểm (khi nhiều user học cùng lúc) để xác định xem có cần điều chỉnh tần suất chạy job rank hay không.
+
+---
+
+## Transaction checkout chạm nhiều bảng (đơn hàng, tồn kho, mã giảm giá) trên sàn e-commerce
+
+**Repository:** `deadlock-ecommerce-order-inventory-coupon`
+
+**Hệ thống:** Một sàn e-commerce mà mỗi lượt checkout tạo 1 đơn hàng, trừ tồn kho của nhiều sản phẩm trong giỏ, và áp dụng mã giảm giá dùng 1 lần (giới hạn số lượt sử dụng).
+
+**Vai trò của flow:** Transaction checkout chạm 3 nhóm bảng khác nhau (order, inventory nhiều dòng sản phẩm, coupon) trong cùng 1 lượt, thứ tự chạm các bảng này lại phụ thuộc thứ tự sản phẩm trong giỏ hàng của từng khách nên rất dễ tạo deadlock chéo giữa các đơn hàng cạnh tranh cùng lúc.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: đơn hàng A có giỏ hàng gồm sản phẩm X rồi Y (khách thêm X trước), đơn hàng B có giỏ hàng gồm sản phẩm Y rồi X (khách thêm Y trước) — nếu code trừ tồn kho theo đúng thứ tự item xuất hiện trong giỏ của từng khách (không chuẩn hóa), A sẽ lock X trước rồi chờ lock Y, B sẽ lock Y trước rồi chờ lock X, tạo deadlock kinh điển; yêu cầu sort danh sách sản phẩm theo product_id tăng dần trước khi bắt đầu lock, bất kể thứ tự khách thêm vào giỏ.
+- Chỉ ra rủi ro cross-table: nếu nhánh code validate mã giảm giá trước rồi mới trừ tồn kho ở 1 phần luồng (ví dụ đơn hàng dùng coupon), nhưng nhánh không dùng coupon lại trừ tồn kho trước rồi mới ghi nhận vào bảng order, thì 2 luồng có thể lock chéo giữa dòng coupon và các dòng inventory khi nhiều đơn hàng chạy song song — yêu cầu quy định 1 thứ tự lock cố định toàn cục cho mọi loại transaction checkout (ví dụ luôn: order row → inventory rows theo id tăng dần → coupon row cuối cùng), áp dụng nhất quán dù đơn có dùng coupon hay không.
+- Mô tả cụ thể tình huống mùa sale: nhiều đơn hàng khác nhau chứa các sản phẩm trùng lặp một phần (đơn A có X, Y, Z; đơn B có Z, X) cùng chạy trong vài giây cao điểm — yêu cầu transaction bị deadlock phải tự động retry với backoff (tối đa 3 lần) và giới hạn thời gian tối đa cho 1 transaction checkout (ví dụ 2 giây) để tránh 1 đơn hàng bị treo kéo dài ảnh hưởng tới các đơn khác trong hàng đợi retry.
+- Chọn isolation level `READ COMMITTED` kèm `SELECT ... FOR UPDATE` tường minh theo đúng thứ tự đã chuẩn hóa cho transaction checkout, giải thích vì sao dùng `SERIALIZABLE` cho toàn bộ transaction sẽ làm tăng abort rate không cần thiết trong giờ cao điểm khi nhiều đơn hàng không thực sự đụng chung sản phẩm nào.
+- Viết test giả lập nhiều đơn hàng với thứ tự sản phẩm trong giỏ được hoán vị ngẫu nhiên (bao gồm cả trường hợp có/không dùng coupon), xác nhận không có transaction nào bị treo quá timeout quy định và invariant tồn kho + số lượt dùng coupon còn lại luôn đúng sau khi toàn bộ retry hoàn tất.
+
+---
+
+## Chuyển hàng liên kho hai chiều với nhiều SKU trong một lần chuyển
+
+**Repository:** `deadlock-warehouse-bidirectional-transfer`
+
+**Hệ thống:** Một hệ thống quản lý kho vận cho chuỗi cửa hàng/nhà phân phối, nhân viên tạo phiếu chuyển hàng giữa 2 kho (trừ tồn kho nguồn, cộng tồn kho đích), mỗi phiếu chuyển có thể gồm nhiều SKU khác nhau trong cùng 1 lần.
+
+**Vai trò của flow:** Transaction xử lý phiếu chuyển hàng giống bài toán chuyển tiền giữa 2 tài khoản kinh điển, nhưng phức tạp hơn vì 1 giao dịch có thể động vào nhiều dòng tồn kho (nhiều cặp kho-SKU) cùng lúc, cần chọn đúng thứ tự lock để không deadlock khi có phiếu chuyển ngược chiều nhau chạy song song.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: phiếu P1 chuyển từ kho A sang kho B gồm SKU 101 rồi SKU 102 (theo thứ tự nhập trên phiếu); phiếu P2 chuyển từ kho B sang kho A gồm SKU 102 rồi SKU 101, cả 2 chạy song song — nếu mỗi transaction lock theo thứ tự "kho nguồn trước, rồi từng SKU theo thứ tự nhập trên phiếu", P1 sẽ lock (A,101) rồi chờ lock (B,102) trong khi P2 đã lock (B,102) rồi chờ lock (A,101), tạo deadlock; yêu cầu chuẩn hóa thứ tự lock toàn cục theo composite key (warehouse_id, sku_id) tăng dần, bất kể chiều chuyển hay thứ tự nhập trên phiếu.
+- Với phiếu có nhiều SKU (ví dụ 20 SKU trong 1 lần chuyển), yêu cầu transaction phải lock toàn bộ các dòng tồn kho liên quan (cả nguồn lẫn đích) theo đúng thứ tự đã chuẩn hóa ngay từ đầu trước khi bắt đầu trừ/cộng bất kỳ dòng nào, không được lock rải rác từng SKU một trong lúc xử lý tuần tự (dễ tạo deadlock giữa các phiếu chỉ chồng lấn một phần SKU với nhau).
+- Khi transaction bị rollback do deadlock, yêu cầu retry tự động nhưng phải đọc lại tồn kho hiện tại tại thời điểm retry (không dùng số liệu đã đọc ở lần thử trước), vì trong khoảng thời gian chờ retry có thể đã có phiếu chuyển khác của các kho liên quan làm thay đổi tồn kho.
+- Chọn isolation level `READ COMMITTED` cho transaction chuyển kho, giải thích cụ thể vì sao `REPEATABLE READ` mặc định của một số DB có thể mở rộng phạm vi lock (gap lock/range lock) và ảnh hưởng tới các phiếu chuyển kho khác không hề liên quan tới cùng SKU, làm tăng khả năng deadlock giả tạo không cần thiết.
+- Viết test dựng nhiều phiếu chuyển ngẫu nhiên giữa các cặp kho khác nhau với danh sách SKU chồng lấn một phần, chạy song song hàng loạt, assert tổng tồn kho từng SKU trên toàn hệ thống bất biến trước/sau và không có phiếu nào bị treo vượt quá timeout quy định dù đã tính cả thời gian retry.

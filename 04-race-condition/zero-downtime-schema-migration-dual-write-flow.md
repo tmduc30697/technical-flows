@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều loại hệ thống web (mạng x�
 - Trong giai đoạn dual-write trước cutover, mọi write cho tenant đang migrate phải ghi cả 2 schema trong cùng 1 transaction phân tán (hoặc pattern outbox/saga nếu 2 schema ở 2 connection khác nhau), có xử lý rõ khi 1 trong 2 bên ghi thất bại (retry hoặc rollback toàn bộ, không để 1 bên có 1 bên không).
 - Yêu cầu đọc dữ liệu trong giai đoạn dual-write luôn đọc từ schema cũ (nguồn sự thật) cho tới khi cutover, để tránh đọc dữ liệu chưa backfill đầy đủ ở schema mới.
 - Có checklist rollback: nếu sau cutover phát hiện lỗi dữ liệu ở schema mới, phải trả routing của tenant đó về schema cũ trong vòng vài phút mà không mất giao dịch nào ghi vào schema mới trong khoảng thời gian đã cutover.
+
+---
+
+## Tách comment dạng nested JSON trong bảng posts sang bảng comment quan hệ riêng (mạng xã hội)
+
+**Repository:** `schema-migration-social-posts-comments-split`
+
+**Hệ thống:** Một mạng xã hội có bảng `posts` lưu comment dạng nested/JSON ngay trong 1 cột của bài viết, cần tách sang bảng `comments` quan hệ riêng để hỗ trợ tính năng mới (trả lời lồng nhiều cấp, like riêng từng comment, phân trang hiệu quả), trong khi traffic đăng bài/bình luận vẫn chạy liên tục 24/7.
+
+**Vai trò của flow:** Flow dual-write phải đảm bảo mọi comment mới được ghi cả vào JSON cũ và bảng `comments` mới, có job backfill comment lịch sử, mà không làm rớt comment hay đổi thứ tự hiển thị trong lúc traffic bình luận vẫn cao liên tục.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: 2 người dùng cùng bình luận vào 1 bài viết đang hot gần như đồng thời (chênh nhau vài trăm mili giây) trong giai đoạn dual-write — việc ghi vào cột JSON cũ (thường phải đọc JSON hiện tại, append, rồi ghi lại cả mảng) không được dùng kiểu đọc-sửa-ghi không atomic vì 2 request đọc cùng JSON gốc rồi ghi đè nhau sẽ làm mất 1 trong 2 comment; yêu cầu mô tả cụ thể cách xử lý (lock dòng post trong lúc append JSON, hoặc chuyển hẳn logic ghi JSON sang dạng append atomic ở tầng lưu trữ), trong khi bảng `comments` mới insert bình thường không gặp vấn đề này vì mỗi comment là 1 dòng riêng.
+- Trong giai đoạn đọc vẫn lấy từ JSON cũ (nguồn sự thật) nhưng ghi đã chạy song song cả 2 nơi, phải đảm bảo thứ tự comment trong JSON và thứ tự theo timestamp trong bảng `comments` khớp nhau tuyệt đối; yêu cầu cơ chế kiểm tra để phát hiện lệch thứ tự (ví dụ do 1 trong 2 lần ghi bị chậm hơn lần kia dưới tải cao) trước khi cho phép chuyển đọc sang bảng mới.
+- Mô tả cụ thể race với reply lồng nhiều cấp: 1 comment cha vừa được tạo và ngay lập tức có người trả lời comment đó (comment con) trước khi thao tác ghi JSON cho comment cha kịp hoàn tất ở phía JSON cũ (do append JSON có độ trễ cao hơn insert bảng quan hệ) — quy định rõ cách xử lý để comment con không bị ghi vào JSON cũ ở vị trí sai cấu trúc lồng, ví dụ chờ xác nhận comment cha đã ghi xong JSON trước khi cho phép reply được xử lý, hoặc retry ghi JSON theo đúng thứ tự cha rồi mới tới con.
+- Job backfill comment lịch sử phải chạy theo batch ưu tiên các bài viết có traffic bình luận đang hoạt động thấp trước, có checkpoint để resume nếu crash giữa chừng, và phải bỏ qua/log riêng các bài viết có comment JSON bị lỗi cấu trúc (dữ liệu cũ có thể không đồng nhất do đã đổi format nhiều lần trước đây) thay vì làm crash toàn bộ job.
+- Có job reconciliation so sánh số lượng comment và nội dung mẫu giữa JSON và bảng mới cho các bài viết có traffic cao mỗi ngày, và chỉ được drop cột JSON cũ sau khi 100% traffic đọc đã chuyển sang bảng mới và không phát hiện lệch trong khoảng thời gian tối thiểu quy định.
+
+---
+
+## Đổi cấu trúc lưu trạng thái vận đơn từ 1 cột status sang bảng lịch sử trạng thái (logistics)
+
+**Repository:** `schema-migration-logistics-shipment-status-history`
+
+**Hệ thống:** Một nền tảng logistics tổng hợp trạng thái vận đơn từ nhiều đối tác vận chuyển khác nhau, hiện lưu trạng thái vận đơn ở 1 cột `status` đơn trên bảng `shipments`, cần chuyển sang bảng `shipment_status_history` để lưu đầy đủ lịch sử các mốc trạng thái phục vụ tra cứu hành trình chi tiết, trong khi đơn hàng vẫn đang di chuyển và nhận cập nhật trạng thái liên tục qua nhiều đối tác vận chuyển.
+
+**Vai trò của flow:** Flow dual-write phải ghi mọi cập nhật trạng thái mới vào cả cột `status` cũ và bảng lịch sử mới, xử lý đúng khi các cập nhật từ nhiều đối tác vận chuyển cho cùng 1 vận đơn đến gần như đồng thời hoặc không đúng thứ tự thời gian thực.
+
+**Yêu cầu cụ thể:**
+- Mô tả cụ thể: 2 cập nhật trạng thái cho cùng 1 vận đơn đến gần như đồng thời từ 2 nguồn khác nhau (webhook từ đối tác chặng đầu báo "đã giao cho đối tác chặng 2" và polling job tự phát hiện trạng thái "đang trung chuyển" cùng lúc) — yêu cầu ghi cột `status` cũ (chỉ giữ 1 giá trị cuối) và bảng lịch sử mới (insert thêm 1 dòng) trong cùng 1 transaction, xác định trạng thái nào là "mới nhất thật sự" dựa trên timestamp gốc của sự kiện (không phải thời điểm hệ thống nhận được), tránh cột `status` cũ bị ghi giá trị cũ hơn đè lên giá trị mới hơn do thứ tự xử lý ở tầng ứng dụng không khớp thứ tự thời gian thực.
+- Trạng thái đến trễ/không đúng thứ tự là bình thường trong logistics do độ trễ khác nhau giữa các đối tác vận chuyển: bảng lịch sử mới phải chấp nhận insert mọi sự kiện theo đúng trình tự nhận được (không từ chối hay ghi đè), nhưng cột `status` cũ chỉ phản ánh trạng thái ứng với timestamp lớn nhất trong các sự kiện đã nhận — yêu cầu test cụ thể giả lập 3 cập nhật đến không đúng thứ tự thời gian, xác nhận `status` cuối cùng đúng và bảng lịch sử vẫn lưu đủ cả 3 sự kiện theo đúng trình tự thực.
+- Xử lý webhook trùng lặp do đối tác vận chuyển retry (vì không nhận được ack kịp thời): idempotent theo mã sự kiện/mã trạng thái từ đối tác để không insert trùng dòng lịch sử khi cùng 1 webhook đến nhiều lần, trong khi vẫn đảm bảo webhook hợp lệ đầu tiên luôn được ghi dù đến đúng lúc đang có traffic cập nhật cao từ các vận đơn khác.
+- Job backfill lịch sử cho các vận đơn đang active (chưa giao xong) phải chạy mà không làm mất các cập nhật trạng thái mới đến ngay trong lúc job đang backfill đúng vận đơn đó — quy định cơ chế khóa ngắn hoặc kiểm tra lại trạng thái sau khi backfill để không bị cập nhật real-time đến giữa chừng ghi đè mất.
+- Chỉ chuyển toàn bộ luồng đọc (tra cứu hành trình cho khách, dashboard vận hành) sang bảng lịch sử mới sau khi đã backfill xong toàn bộ vận đơn đang active và dual-write chạy ổn định không lệch trong khoảng thời gian tối thiểu quy định, đặc biệt phải test kỹ các vận đơn có tần suất cập nhật trạng thái cao (đơn liên tỉnh qua nhiều chặng trung chuyển) trước khi áp dụng cho toàn hệ thống.

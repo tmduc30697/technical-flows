@@ -52,3 +52,37 @@ Các đề bài dưới đây đi qua nhiều bối cảnh cần khóa/bầu lea
 - Phải log đầy đủ audit: region nào deploy, lúc nào, ai trigger, để phục vụ rollback/điều tra sự cố.
 - Xử lý kịch bản coordinator mất kết nối tạm thời với 1 region: region đó không được tự cho là "an toàn để deploy" nếu không xác nhận được lock hợp lệ.
 - Đưa ra được giới hạn thời gian chờ tối đa cho pipeline đang chờ lock (queue timeout) và hành vi khi vượt quá (hủy job, thông báo, retry).
+
+---
+
+## Giữ chỗ tồn kho cho sản phẩm flash sale
+
+**Repository:** `distributed-lock-flash-sale-inventory-reservation`
+
+**Hệ thống:** Sàn thương mại điện tử mở bán flash sale một sản phẩm số lượng giới hạn, hàng nghìn request mua hàng gửi tới cùng lúc trong vài giây đầu mở bán.
+
+**Vai trò của flow:** Distributed lock theo từng sản phẩm (per-SKU) đảm bảo tại một thời điểm chỉ một tiến trình được đọc-và-trừ tồn kho cho sản phẩm đó, tránh oversell do nhiều request đọc cùng số tồn kho rồi cùng trừ.
+
+**Yêu cầu cụ thể:**
+- Lock phải được khóa ở granularity đúng mức (per-SKU, không lock toàn catalog gây nghẽn cổ chai, không lock quá lỏng theo warehouse chung gây oversell chéo sản phẩm), với TTL đủ ngắn để nhả nhanh cho request tiếp theo nhưng đủ dài để hoàn tất thao tác trừ kho — quá ngắn thì lock hết hạn giữa chừng gây 2 tiến trình cùng trừ, quá dài thì hàng nghìn request xếp hàng chờ gây timeout hàng loạt.
+- Nếu tiến trình giữ lock crash ngay sau khi đã trừ số dư tồn kho trong DB nhưng chưa kịp tạo record đơn hàng/release lock, phải có cơ chế phát hiện trạng thái dở dang này khi lock hết hạn (ví dụ đối chiếu số đã trừ với đơn hàng tồn tại tương ứng) để hoàn lại tồn kho bị "kẹt" thay vì mất vĩnh viễn.
+- Dùng fencing token gắn với lock để tránh trường hợp một tiến trình bị treo (GC pause, network delay) tưởng mình còn giữ lock, ghi trừ kho sau khi lock đã hết hạn và bị tiến trình khác giành mất — thao tác trừ kho với token cũ phải bị service tồn kho từ chối.
+- Với hàng nghìn request cạnh tranh cùng 1 lock, phải có chiến lược fail-fast cho request không giành được lock trong thời gian ngắn (trả "hết hàng/thử lại" thay vì xếp hàng chờ vô hạn), tránh hàng đợi lock phình to làm nghẽn toàn hệ thống.
+- Retry của client (do timeout network) không được gây trừ kho 2 lần cho cùng một yêu cầu mua — cần idempotency key gắn với request mua hàng độc lập với cơ chế lock, vì lock chỉ đảm bảo tuần tự xử lý chứ không đảm bảo request không bị gửi lặp.
+
+---
+
+## Phân việc cho worker pool xử lý hàng đợi công việc lớn
+
+**Repository:** `distributed-lock-worker-pool-job-distribution`
+
+**Hệ thống:** Nhiều worker instance chạy song song để xử lý hàng loạt job từ một hàng đợi công việc lớn (ví dụ xử lý file, gửi batch email), cần chia việc sao cho không trùng lặp và không bỏ sót.
+
+**Vai trò của flow:** Distributed lock/leader election theo từng job (hoặc theo phân vùng job) đảm bảo mỗi job chỉ được đúng một worker nhận và xử lý tại một thời điểm, đồng thời không bỏ sót job khi worker chết giữa chừng.
+
+**Yêu cầu cụ thể:**
+- Worker phải "claim" một job bằng lock/lease có TTL trước khi bắt đầu xử lý; nếu worker chết giữa chừng (crash, bị kill do autoscale down) mà không release lock, TTL hết hạn phải tự đưa job đó về trạng thái "khả dụng" để worker khác nhận lại — không để job kẹt vĩnh viễn ở trạng thái "đang xử lý" bởi worker đã chết.
+- Hai worker cùng lúc thấy job "chưa ai nhận" và cùng cố gắng claim (race condition khi liệt kê job và acquire lock không atomic với nhau) phải được giải quyết sao cho chỉ đúng một worker thắng, worker thua phải nhận biết ngay để không tiếp tục xử lý song song, tránh xử lý trùng và ghi kết quả hai lần.
+- Nếu job cần thời gian xử lý lâu hơn TTL ước tính ban đầu (ví dụ file lớn bất thường), worker đang xử lý phải renew lease định kỳ; nếu renew thất bại (mất kết nối coordinator) trong khi job vẫn đang chạy thật, cần cơ chế idempotent hoặc kiểm tra trạng thái trước khi apply kết quả để chịu được việc worker khác nhận lại job đó khi lock hết hạn.
+- Khi một worker bị autoscale terminate có báo trước (graceful shutdown signal), phải chủ động release lock/trả lại job đang giữ ngay lập tức thay vì chờ TTL hết hạn, để giảm độ trễ job bị "treo" chờ timeout tự nhiên.
+- Cần cơ chế định kỳ quét các job ở trạng thái "đang xử lý" quá lâu so với TTL kỳ vọng (dead job detection) để phát hiện sớm rò rỉ lock hoặc lỗi hệ thống, tránh dựa hoàn toàn vào TTL tự nhiên mà không có giám sát chủ động.
