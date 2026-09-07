@@ -71,6 +71,12 @@ Danh sách tập trung vào chiều sâu kỹ thuật/hạ tầng trong bối c�
   - [Cách ly dữ liệu nhân sự/lương giữa các công ty khách hàng trên SaaS payroll](exercises/multi-tenancy-payroll-saas-isolation/)
   - [Cách ly dữ liệu bán hàng giữa các seller trên marketplace dùng chung nền tảng](exercises/multi-tenancy-marketplace-seller-isolation/)
   - [Cách ly dữ liệu giữa các phòng ban dùng chung một công cụ nội bộ](exercises/multi-tenancy-internal-tool-department-isolation/)
+- **Client-side caching & storage flow (localStorage/sessionStorage/IndexedDB/bfcache)** — Các đề bài dưới đây đi qua nhiều bối cảnh web khác nhau (giỏ hàng e-commerce, dashboard SaaS B2B offline-first, ngân hàng số, feed mạng xã hội, trình soạn thảo CMS) để luyện chọn đúng nơi lưu dữ liệu phía trình duyệt (memory/sessionStorage/localStorage/IndexedDB), xử lý đồng bộ đa tab, giới hạn dung lượng/quota, bảo mật dữ liệu nhạy cảm, và tránh hiển thị dữ liệu cache đã cũ (stale) như là dữ liệu hiện tại.
+  - [Giữ giỏ hàng và form checkout dở dang qua localStorage cho e-commerce](exercises/client-storage-ecommerce-cart-draft-persistence/)
+  - [Cache danh sách lớn offline-first bằng IndexedDB cho SaaS dashboard](exercises/client-storage-saas-offline-indexeddb-sync/)
+  - [Lưu token/session phía client an toàn cho ứng dụng ngân hàng số](exercises/client-storage-fintech-secure-session-token/)
+  - [Khôi phục scroll feed và đồng bộ trạng thái đa tab cho mạng xã hội](exercises/client-storage-social-feed-scroll-multi-tab/)
+  - [Autosave draft chống mất nội dung bằng IndexedDB cho trình soạn thảo CMS](exercises/client-storage-cms-editor-autosave-draft/)
 
 ## Xử lý dữ liệu lớn/pipeline, đặc trưng cho hệ thống web quy mô lớn
 
